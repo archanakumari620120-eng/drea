@@ -1,3 +1,7 @@
+import os
+CFG["client_id"] = os.getenv("YT_CLIENT_ID", CFG.get("client_id"))
+CFG["client_secret"] = os.getenv("YT_CLIENT_SECRET", CFG.get("client_secret"))
+CFG["refresh_token"] = os.getenv("YT_REFRESH_TOKEN", CFG.get("refresh_token"))
 import os, json, random, subprocess
 from typing import Optional
 import requests
