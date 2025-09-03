@@ -1,8 +1,9 @@
-requests
-pillow
 moviepy
-imageio-ffmpeg
+imageio[ffmpeg]
+pillow
+requests
+schedule
 google-api-python-client
 google-auth
 google-auth-oauthlib
-yt-dlp
+pexels-api
