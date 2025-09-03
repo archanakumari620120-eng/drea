@@ -1,28 +1,33 @@
-name: YouTube Shorts Auto Upload
-
-on:
-  workflow_dispatch:
-
-jobs:
-  upload:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v3
-
-      - name: Set up Python
-        uses: actions/setup-python@5ccb29d8773c3f3f653e1705f474dfaa8a06a912 # v4
-        with:
-          python-version: '3.10'
-
-      - name: Install ffmpeg
-        run: sudo apt-get install -y ffmpeg
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install --no-cache-dir -r requirements.txt
-
-      - name: Run script
-        run: python main.py
+{
+  "client_id": "1//0gi7F7NZGIqJiCgYIARAAGBASNwF-L9IrEFAd2hdzmg3CREdZRPAQY1UdBbmKxv1uv2vqszqrxkBNenGrmz63A-xEyOtMIPTlITg",
+  "client_secret": "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",
+  "redirect_uris": [
+    "http://localhost:8081/"
+  ],
+  "refresh_token": "1//0gi7F7NZGIqJiCgYIARAAGBASNwF-L9IrEFAd2hdzmg3CREdZRPAQY1UdBbmKxv1uv2vqszqrxkBNenGrmz63A-xEyOtMIPTlITg",
+  "api_key": "JHlpkVafbSlaOzW82Cy5GgGrulKWRRRQQMqakIZzyju0iagWj7ZmWyWL",
+  "gemini_api_key": "AIzaSyCfSRrZHcSf1_NgrosBfP7hSd1j2c9uTuA",
+  "hf_token": "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",
+  "video_length_sec": 15,
+  "target_resolution": [
+    1080,
+    1920
+  ],
+  "pexels_query": [
+    "nature",
+    "space",
+    "city",
+    "abstract",
+    "technology",
+    "timelapse",
+    "clouds",
+    "neon",
+    "mountains"
+  ],
+  "music_search_query": "ytsearch20:No Copyright background music short",
+  "visibility": "public",
+  "upload_interval_hours": 5,
+  "video_title_template": "AI Shorts - {prompt}",
+  "video_description_template": "Generated automatically with AI.\nPrompt: {prompt}",
+  "video_tags": ["AI", "shorts", "trending"]
+}
