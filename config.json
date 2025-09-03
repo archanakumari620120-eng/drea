@@ -1,0 +1,32 @@
+{
+  "client_id": "1//0gi7F7NZGIqJiCgYIARAAGBASNwF-L9IrEFAd2hdzmg3CREdZRPAQY1UdBbmKxv1uv2vqszqrxkBNenGrmz63A-xEyOtMIPTlITg",
+  "client_secret": ""client_secret":"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","redirect_uris":["http://localhost:8081/"]}}",
+  "refresh_token": "1//0gi7F7NZGIqJiCgYIARAAGBASNwF-L9IrEFAd2hdzmg3CREdZRPAQY1UdBbmKxv1uv2vqszqrxkBNenGrmz63A-xEyOtMIPTlITg",
+  "api_key": "JHlpkVafbSlaOzW82Cy5GgGrulKWRRRQQMqakIZzyju0iagWj7ZmWyWL",
+"gemini_api_key": "AIzaSyCfSRrZHcSf1_NgrosBfP7hSd1j2c9uTuA",
+  "hf_token": "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"
+
+  "video_length_sec": 15,
+  "target_resolution": [
+    1080,
+    1920
+  ],
+  "pexels_query": [
+    "nature",
+    "space",
+    "city",
+    "abstract",
+    "technology",
+    "timelapse",
+    "clouds",
+    "neon",
+    "mountains"
+  ],
+  "music_search_query": "ytsearch20:No Copyright background music short",
+  "visibility": "public"
+
+  "upload_interval_hours": 5,
+  "video_title_template": "AI Shorts - {prompt}",
+  "video_description_template": "Generated automatically with AI.\nPrompt: {prompt}",
+  "video_tags": ["AI", "shorts", "trending"]
+}
