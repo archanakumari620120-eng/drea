@@ -28,13 +28,11 @@ jobs:
             https://api.github.com/repos/${REPO}/tarball/${SHA}
           tar -xzf src.tar.gz
           # move extracted folder contents to workspace root
-          EXTRACTED_DIR="$(find . -maxdepth 1 -type d -name '-' | head -n 1)"
-          shopt -s dotglob
-          mv "$EXTRACTED_DIR"/* .
-          shopt -u dotglob
-          rm -rf "$EXTRACTED_DIR" src.tar.gz
-          ls -la
-
+         EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name '-' | head -n 1)
+echo "Extracted folder: $EXTRACTED_DIR"
+cp -r "$EXTRACTED_DIR"/* .
+rm -rf "$EXTRACTED_DIR" src.tar.gz
+ls -la
       - name: Python available?
         run: |
           python3 --version
