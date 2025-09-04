@@ -1,30 +1,40 @@
-name: build
-
+name: YouTube Shorts Auto Upload
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-    - name: Checkout repository
-        uses: actions/checkout@f213d3c485d8a3e811a4c21c6d4e8e85c36e86a0
+      - name: Manual checkout (no actions/checkout)
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          git init
+          git remote add origin https://github.com/${REPO}.git
+          git fetch --depth=1 origin ${SHA}
+          git checkout -q FETCH_HEAD
 
-    -name: Set up Python
-        uses: actions/setup-python@82c76e31bb3dc910f68e0081cb32635878777bc
-      with:
-        python-version: '3.10'
+      - name: Use system Python (no setup-python)
+        run: |
+          python3 --version
+          python3 -m pip install --upgrade pip wheel setuptools
 
-    - name: Install dependencies
-      run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python3 -m pip install -r requirements.txt
 
-    - name: Run script
-      env:
-        YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-        YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-        YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        YT_API_KEY: ${{ secrets.YT_API_KEY }}
-      run: python main.py
+      - name: Run script
+        env:
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+          HF_TOKEN:         ${{ secrets.HF_TOKEN }}
+          PEXELS_API_KEY:   ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          python3 main.py
