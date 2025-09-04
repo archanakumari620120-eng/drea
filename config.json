@@ -1,6 +1,6 @@
 {
    "client_id": "1//0gi7F7NZGIqJiCgYIARAAGBASNwF-L9IrEFAd2hdzmg3CREdZRPAQY1UdBbmKxv1uv2vqszqrxkBNenGrmz63A-xEyOtMIPTlITg",
-  "client_secret": ""client_secret":"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","redirect_uris":["http://localhost:8081/"]}}",
+  "client_secret":"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","redirect_uris":["http://localhost:8081/"]}}",
   "refresh_token": "1//0gi7F7NZGIqJiCgYIARAAGBASNwF-L9IrEFAd2hdzmg3CREdZRPAQY1UdBbmKxv1uv2vqszqrxkBNenGrmz63A-xEyOtMIPTlITg",
   "pexels_api_key": "JHlpkVafbSlaOzW82Cy5GgGrulKWRRRQQMqakIZzyju0iagWj7ZmWyWL",
 "gemini_api_key": "AIzaSyCfSRrZHcSf1_NgrosBfP7hSd1j2c9uTuA",
