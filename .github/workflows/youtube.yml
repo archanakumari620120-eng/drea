@@ -1,9 +1,9 @@
-name: YouTube Shorts Auto Upload
+name: build
 
 on:
-  workflow_dispatch:       # manually trigger karne ke liye
+  workflow_dispatch:
   schedule:
-    - cron: "0 */5 * * *"  # har 5 ghante mein chalega
+    - cron: "0 */5 * * *"
 
 jobs:
   build:
@@ -11,21 +11,19 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@f43a0e5ffb64f73e0e6d2e8c6e2d57d3c5c1e6c0  # v3.5.3 SHA
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@65d7f2a9b9e0b1a3a79b9d7ab0f6c2f1c2e2f6b2  # v4.7.1 SHA
         with:
           python-version: "3.10"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt --prefer-binary
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          pip install --prefer-binary -r requirements.txt
 
       - name: Run video generation + upload
         run: |
-          echo "🚀 Script started..."
+          echo "✅ Script started..."
           python main.py
