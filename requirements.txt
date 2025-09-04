@@ -1,7 +1,7 @@
 google-api-python-client==2.146.0
 google-auth==2.35.0
 google-auth-oauthlib==1.2.1
-schedule==1.2.2
+moviepy==1.0.3
 pillow==10.4.0
 requests==2.32.3
 yt-dlp==2024.10.7
