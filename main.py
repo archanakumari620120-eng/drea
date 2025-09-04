@@ -1,205 +1,94 @@
 import os
-import json
 import random
-import requests
-from pathlib import Path
-import subprocess
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-import schedule
+import json
 import time
+from moviepy.editor import VideoFileClip, ImageClip, AudioFileClip, CompositeVideoClip
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.oauth2.credentials import Credentials
+from PIL import Image, ImageDraw, ImageFont
 
-# ---------------- Load config ----------------
+# -------------------------------
+# Load config
+# -------------------------------
 with open("config.json", "r") as f:
     CONFIG = json.load(f)
 
-CLIENT_ID = CONFIG["client_id"]
-CLIENT_SECRET = CONFIG["client_secret"]
-REFRESH_TOKEN = CONFIG["refresh_token"]
-API_KEY = CONFIG["api_key"]
-GEMINI_API_KEY = CONFIG["gemini_api_key"]
-HF_TOKEN = CONFIG["hf_token"]
-PEXELS_KEY = CONFIG.get("pexels_api_key", None)
+API_SERVICE_NAME = "youtube"
+API_VERSION = "v3"
 
-UPLOAD_INTERVAL_HOURS = CONFIG.get("upload_interval_hours", 5)
-VIDEO_LENGTH = CONFIG.get("video_length_sec", 15)
-RESOLUTION = CONFIG.get("target_resolution", [1080, 1920])
-TITLE_TEMPLATE = CONFIG.get("video_title_template", "AI Shorts - {prompt}")
-DESCRIPTION_TEMPLATE = CONFIG.get("video_description_template", "Generated with AI\nPrompt: {prompt}")
-TAGS = CONFIG.get("video_tags", ["AI", "shorts", "trending"])
-VISIBILITY = CONFIG.get("visibility", "public")
+# -------------------------------
+# Pick random image & music
+# -------------------------------
+def pick_random_file(folder):
+    files = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+    return os.path.join(folder, random.choice(files)) if files else None
 
-# ---------------- Manual image picker ----------------
-def pick_manual_image(images_dir="images"):
-    IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
-    p = Path(images_dir)
-    if not p.exists():
-        return None
-    files = []
-    for f in p.rglob("*"):
-        if not f.is_file():
-            continue
-        if any(part.startswith(".") for part in f.parts):
-            continue
-        if f.suffix.lower() in IMG_EXT:
-            files.append(str(f))
-    if not files:
-        return None
-    choice = random.choice(files)
-    print("[LOG] pick_manual_image ->", choice)
-    return choice
+# -------------------------------
+# Generate video (1080x1920)
+# -------------------------------
+def generate_video():
+    print("🎬 Generating video...")
 
-# ---------------- Local music picker ----------------
-def pick_local_music(music_dir="music"):
-    AUDIO_EXT = {".mp3", ".m4a", ".wav", ".aac", ".ogg", ".flac", ".opus", ".wma", ".mkv", ".mp4"}
-    p = Path(music_dir)
-    if not p.exists():
-        return None
-    files = []
-    for f in p.rglob("*"):
-        if not f.is_file():
-            continue
-        if any(part.startswith(".") for part in f.parts):
-            continue
-        if f.suffix.lower() in AUDIO_EXT:
-            files.append(str(f))
-    if not files:
-        return None
-    choice = random.choice(files)
-    print("[LOG] pick_local_music ->", choice)
-    return choice
+    image_file = pick_random_file("images")
+    music_file = pick_random_file("music")
 
-# ---------------- AI Prompt Generator ----------------
-def generate_prompt():
-    try:
-        # Gemini
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
-        payload = {"contents": [{"parts": [{"text": "Generate a short creative prompt for a video."}]}]}
-        r = requests.post(url, json=payload, timeout=15)
-        if r.ok:
-            txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-            print("[LOG] Gemini prompt ->", txt)
-            return txt
-    except Exception as e:
-        print("[WARN] Gemini failed:", e)
+    if not image_file or not music_file:
+        raise FileNotFoundError("❌ Image or music file missing in images/ or music/ folder!")
 
-    try:
-        # HuggingFace fallback
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        r = requests.post("https://api-inference.huggingface.co/models/gpt2",
-                          headers=headers, json={"inputs": "Generate a short creative prompt for a video."}, timeout=15)
-        if r.ok:
-            txt = r.json()[0]["generated_text"]
-            print("[LOG] HF prompt ->", txt)
-            return txt
-    except Exception as e:
-        print("[WARN] HuggingFace failed:", e)
+    # Create image clip (background 1080x1920)
+    img_clip = ImageClip(image_file).resize(height=1920).set_position("center").set_duration(30)
 
-    return "Beautiful AI generated video"
+    # Add music
+    audio_clip = AudioFileClip(music_file).subclip(0, 30)
+    final_clip = img_clip.set_audio(audio_clip)
 
-# ---------------- Image Source ----------------
-def get_image(prompt):
-    if PEXELS_KEY:
-        try:
-            headers = {"Authorization": PEXELS_KEY}
-            r = requests.get(f"https://api.pexels.com/v1/search?query={prompt}&per_page=10", headers=headers, timeout=15)
-            if r.ok and r.json()["photos"]:
-                url = random.choice(r.json()["photos"])["src"]["original"]
-                out = "temp_image.jpg"
-                with open(out, "wb") as f:
-                    f.write(requests.get(url).content)
-                print("[LOG] Pexels image downloaded")
-                return out
-        except Exception as e:
-            print("[WARN] Pexels failed:", e)
+    output_path = "output.mp4"
+    final_clip.write_videofile(output_path, fps=30, codec="libx264", audio_codec="aac")
+    return output_path
 
-    return pick_manual_image()
+# -------------------------------
+# Authenticate YouTube
+# -------------------------------
+def get_youtube_service():
+    creds = Credentials.from_authorized_user_file("client_secret.json", ["https://www.googleapis.com/auth/youtube.upload"])
+    return build(API_SERVICE_NAME, API_VERSION, credentials=creds)
 
-# ---------------- Music Source ----------------
-def get_music():
-    local = pick_local_music()
-    if local:
-        return local
-    try:
-        cmd = ["yt-dlp", "-f", "bestaudio", "--extract-audio", "--audio-format", "mp3",
-               "-o", "temp_music.%(ext)s", CONFIG["music_search_query"]]
-        subprocess.run(cmd, check=True)
-        print("[LOG] Downloaded music from YouTube")
-        return "temp_music.mp3"
-    except Exception as e:
-        print("[WARN] Music fetch failed:", e)
-        return None
+# -------------------------------
+# Upload to YouTube
+# -------------------------------
+def upload_video(file_path):
+    youtube = get_youtube_service()
 
-# ---------------- Dummy video generator ----------------
-def generate_video(image_path, music_path, output="output.mp4"):
-    # Simple ffmpeg (no moviepy needed)
-    try:
-        cmd = [
-            "ffmpeg", "-loop", "1", "-i", image_path,
-            "-i", music_path,
-            "-c:v", "libx264", "-t", str(VIDEO_LENGTH),
-            "-pix_fmt", "yuv420p", "-vf", f"scale={RESOLUTION[0]}:{RESOLUTION[1]}",
-            "-y", output
-        ]
-        subprocess.run(cmd, check=True)
-        print("[LOG] Video generated:", output)
-        return output
-    except Exception as e:
-        print("[ERROR] ffmpeg failed:", e)
-        return None
-
-# ---------------- YouTube Upload ----------------
-def upload_to_youtube(file_path, prompt):
-    creds = Credentials.from_authorized_user_info({
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "refresh_token": REFRESH_TOKEN
-    })
-
-    youtube = build("youtube", "v3", credentials=creds)
-
-    body = {
+    request_body = {
         "snippet": {
-            "title": TITLE_TEMPLATE.format(prompt=prompt[:70]),
-            "description": DESCRIPTION_TEMPLATE.format(prompt=prompt),
-            "tags": TAGS,
+            "title": f"Random Short #{random.randint(1000,9999)}",
+            "description": "Auto-uploaded YouTube Short 🎬",
+            "tags": ["shorts", "ai", "automation"],
             "categoryId": "22"
         },
-        "status": {"privacyStatus": VISIBILITY}
+        "status": {
+            "privacyStatus": "public",
+            "selfDeclaredMadeForKids": False
+        }
     }
 
+    media_file = MediaFileUpload(file_path)
+    request = youtube.videos().insert(
+        part="snippet,status",
+        body=request_body,
+        media_body=media_file
+    )
+    response = request.execute()
+    print(f"✅ Uploaded successfully! Video ID: {response['id']}")
+
+# -------------------------------
+# Main
+# -------------------------------
+if __name__ == "__main__":
+    print("🚀 Job started...")
     try:
-        request = youtube.videos().insert(
-            part="snippet,status",
-            body=body,
-            media_body=file_path
-        )
-        response = request.execute()
-        print("[LOG] Uploaded video:", response["id"])
-        return response
+        video_file = generate_video()
+        upload_video(video_file)
     except Exception as e:
-        print("[ERROR] Upload failed:", e)
-        return None
-
-# ---------------- Main Job ----------------
-def job():
-    prompt = generate_prompt()
-    img = get_image(prompt)
-    music = get_music()
-    if not img or not music:
-        print("[ERROR] Missing image or music")
-        return
-    video = generate_video(img, music)
-    if video:
-        upload_to_youtube(video, prompt)
-
-# ---------------- Scheduler ----------------
-print(f"[LOG] Scheduler started. Interval = {UPLOAD_INTERVAL_HOURS} hours")
-schedule.every(UPLOAD_INTERVAL_HOURS).hours.do(job)
-
-job()  # run immediately first time
-
-while True:
-    schedule.run_pending()
-    time.sleep(60)
-        
+        print(f"❌ ERROR: {e}")
