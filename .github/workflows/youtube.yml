@@ -3,7 +3,7 @@ name: YouTube Auto Upload
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */5 * * *"   # har 5 ghante me (UTC)
+    - cron: "0 */5 * * *"   # har 5 ghante (UTC)
 
 jobs:
   build:
@@ -12,17 +12,28 @@ jobs:
       contents: read
 
     steps:
-      - name: Manual checkout (no actions/checkout)
+      # ⬇️ Checkout without actions/checkout (download archive via API)
+      - name: Download source archive (no actions/checkout)
         env:
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git --version
-          rm -rf ./* ./.??* || true
-          git init
-          git remote add origin https://github.com/${REPO}.git
-          git fetch --depth=1 origin ${SHA}
-          git checkout -q FETCH_HEAD
+          set -e
+          echo "Downloading tarball for $REPO @ $SHA"
+          curl -L \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -o src.tar.gz \
+            https://api.github.com/repos/${REPO}/tarball/${SHA}
+          tar -xzf src.tar.gz
+          # move extracted folder contents to workspace root
+          EXTRACTED_DIR="$(find . -maxdepth 1 -type d -name '-' | head -n 1)"
+          shopt -s dotglob
+          mv "$EXTRACTED_DIR"/* .
+          shopt -u dotglob
+          rm -rf "$EXTRACTED_DIR" src.tar.gz
+          ls -la
 
       - name: Python available?
         run: |
