@@ -144,7 +144,7 @@ def job():
         upload_to_youtube(title, description, tags)
     else:
         print("❌ No image found!")
-if _name_ == "_main_":
+if '__name__' == "_main_":
     main()
     job()
     schedule.every(UPLOAD_INTERVAL).seconds.do(job)
