@@ -1,25 +1,30 @@
-name: YouTube Shorts Auto Upload
+name: build
 
 on:
-  workflow_dispatch:   # Manual run button
+  workflow_dispatch:
   schedule:
-    - cron: "0 */5 * * *"   # Har 5 ghante me chalega
+    - cron: "0 */5 * * *"   # har 5 ghante me chalega
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@f43a0e5ffb64f73e0e6d2e8c6e2d57d3c5c1e6c0  # SHA for v3.5.3
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@8f9a9c0d4c44a9fa2c44f4f1f478e6c0a8a1b9a6 # SHA for v4.7.1
         with:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Run script
-        run: python main.py
+      - name: Run video generation + upload
+        run: |
+          echo "✅ Script started..."
+          python main.py
+          
