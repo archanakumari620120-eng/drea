@@ -4,8 +4,6 @@ imageio-ffmpeg==0.4.9
 numpy==1.23.5
 Pillow==9.5.0
 requests==2.31.0
-google-api-python-client==2.96.0
-google-auth==2.23.0
-google-auth-oauthlib==1.1.0
-yt-dlp==2023.11.16
-proglog==0.1.10
+google-api-python-client==2.108.0
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
