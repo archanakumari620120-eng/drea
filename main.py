@@ -146,6 +146,7 @@ def job():
         print("❌ No image found!")
 
 if _name_ == "_main_":
+    main()
     job()
     schedule.every(UPLOAD_INTERVAL).seconds.do(job)
     while True:
