@@ -1,6 +1,9 @@
-name: YouTube Shorts Auto Upload
+name: YouTube Auto Upload
+
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 */5 * * *"   # har 5 ghante me (UTC)
 
 jobs:
   build:
@@ -14,12 +17,14 @@ jobs:
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
+          git --version
+          rm -rf ./* ./.??* || true
           git init
           git remote add origin https://github.com/${REPO}.git
           git fetch --depth=1 origin ${SHA}
           git checkout -q FETCH_HEAD
 
-      - name: Use system Python (no setup-python)
+      - name: Python available?
         run: |
           python3 --version
           python3 -m pip install --upgrade pip wheel setuptools
@@ -28,7 +33,7 @@ jobs:
         run: |
           python3 -m pip install -r requirements.txt
 
-      - name: Run script
+      - name: Run one generation+upload
         env:
           YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
