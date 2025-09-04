@@ -1,54 +1,47 @@
-name: YouTube Auto Upload
+name: build
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */5 * * *"   # har 5 ghante (UTC)
+    - cron: "0 */5 * * *" # har 5 ghante run hoga
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
-      # ⬇️ Checkout without actions/checkout (download archive via API)
-      - name: Download source archive (no actions/checkout)
-        env:
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # ✅ Repo download without actions/checkout
+      - name: Download source archive
         run: |
-          set -e
-          echo "Downloading tarball for $REPO @ $SHA"
-          curl -L \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -o src.tar.gz \
-            https://api.github.com/repos/${REPO}/tarball/${SHA}
+          curl -L -o src.tar.gz https://github.com/${{ github.repository }}/archive/${{ github.sha }}.tar.gz
           tar -xzf src.tar.gz
-          # move extracted folder contents to workspace root
-         EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name '-' | head -n 1)
-echo "Extracted folder: $EXTRACTED_DIR"
-cp -r "$EXTRACTED_DIR"/* .
-rm -rf "$EXTRACTED_DIR" src.tar.gz
-ls -la
-      - name: Python available?
-        run: |
-          python3 --version
-          python3 -m pip install --upgrade pip wheel setuptools
+          EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name '-' | head -n 1)
+          echo "Extracted folder: $EXTRACTED_DIR"
+          cp -r "$EXTRACTED_DIR"/* .
+          rm -rf "$EXTRACTED_DIR" src.tar.gz
+          ls -la
 
+      # ✅ Python setup with pin
+      - name: Set up Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+          python3 -m pip install --upgrade pip
+
+      # ✅ Install dependencies (version lock to avoid future mismatch)
       - name: Install dependencies
         run: |
-          python3 -m pip install -r requirements.txt
+          pip install moviepy==1.0.3 imageio-ffmpeg==0.4.9 pillow==10.2.0 requests==2.31.0 schedule==1.2.1 google-api-python-client==2.131.0 google-auth==2.29.0 google-auth-oauthlib==1.2.0
 
-      - name: Run one generation+upload
+      # ✅ Run script
+      - name: Run one generation + upload
         env:
-          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
-          HF_TOKEN:         ${{ secrets.HF_TOKEN }}
-          PEXELS_API_KEY:   ${{ secrets.PEXELS_API_KEY }}
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
           python3 main.py
