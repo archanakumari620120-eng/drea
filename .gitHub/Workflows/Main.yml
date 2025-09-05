@@ -25,20 +25,3 @@ jobs:
 
       - name: Run script
         run: python main.py
-"""
-
-# Create directories
-with open(os.path.join(repo_name, "main.py"), "w") as f:
-    f.write(main_py)
-
-with open(os.path.join(repo_name, "requirements.txt"), "w") as f:
-    f.write(requirements_txt)
-
-with open(os.path.join(repo_name, "config.json"), "w") as f:
-    f.write(config_json)
-
-with open(os.path.join(workflow_dir, "main.yml"), "w") as f:
-    f.write(workflow_yml)
-
-os.makedirs(os.path.join(repo_name, "images"), exist_ok=True)
-os.makedirs(os.path.join(repo_name, "music"), exist_ok=True)
