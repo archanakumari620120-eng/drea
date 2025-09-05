@@ -1,0 +1,5 @@
+{
+  "GEMINI_API_KEY": "your-gemini-key",
+  "HUGGINGFACE_API_KEY": "your-huggingface-key",
+  "PEXELS_API_KEY": "your-pexels-key"
+}
