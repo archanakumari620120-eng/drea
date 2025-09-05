@@ -1,61 +1,84 @@
-import os, random, time, schedule
-from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
+import os
+import json
+import traceback
+from moviepy.editor import ImageClip, concatenate_videoclips, AudioFileClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
-# Config load
-import json
-with open("config.json") as f:
-    config = json.load(f)
+# ---------------- Load Config ----------------
+print("🔑 Loading config.json ...")
+try:
+    with open("config.json", "r") as f:
+        config = json.load(f)
+except Exception as e:
+    print("❌ Error loading config.json:", e)
+    traceback.print_exc()
+    exit(1)
 
-# Paths
-IMAGE_DIR = "images"
-MUSIC_DIR = "music"
-
+# ---------------- Video Generation ----------------
 def generate_video():
-    print("🎬 Generating video...")
-    # pick random image
-    image_file = random.choice(os.listdir(IMAGE_DIR))
-    img_path = os.path.join(IMAGE_DIR, image_file)
-    clip = ImageClip(img_path, duration=10).resize((1080,1920))
+    try:
+        print("🎬 Starting video generation...")
+        images = [os.path.join("images", img) for img in os.listdir("images") if img.endswith((".jpg", ".png"))]
+        if not images:
+            print("❌ No images found in /images")
+            return None
 
-    # pick random music
-    music_file = random.choice(os.listdir(MUSIC_DIR))
-    music_path = os.path.join(MUSIC_DIR, music_file)
-    audio = AudioFileClip(music_path).subclip(0,10)
+        clips = []
+        for img in images:
+            print(f"🖼️ Adding image: {img}")
+            clip = ImageClip(img).set_duration(3).resize(height=1920, width=1080)
+            clips.append(clip)
 
-    clip = clip.set_audio(audio)
-    clip.write_videofile("output.mp4", fps=24)
-    return "output.mp4"
+        final = concatenate_videoclips(clips, method="compose")
 
-def upload_video(file_path):
-    print("📤 Uploading video to YouTube...")
-    creds = Credentials.from_authorized_user_file("token.json", ["https://www.googleapis.com/auth/youtube.upload"])
-    youtube = build("youtube", "v3", credentials=creds)
+        # Add music if available
+        music_files = [os.path.join("music", m) for m in os.listdir("music") if m.endswith(".mp3")]
+        if music_files:
+            print(f"🎵 Adding background music: {music_files[0]}")
+            audio = AudioFileClip(music_files[0])
+            final = final.set_audio(audio)
 
-    request = youtube.videos().insert(
-        part="snippet,status",
-        body={
+        output_path = "output.mp4"
+        final.write_videofile(output_path, fps=24)
+        print(f"✅ Video generated: {output_path}")
+        return output_path
+    except Exception as e:
+        print("❌ Error in video generation:", e)
+        traceback.print_exc()
+        return None
+
+# ---------------- YouTube Upload ----------------
+def upload_to_youtube(video_path):
+    try:
+        print("📤 Starting YouTube upload...")
+        creds = Credentials.from_authorized_user_file("token.json", ["https://www.googleapis.com/auth/youtube.upload"])
+        youtube = build("youtube", "v3", credentials=creds)
+
+        request_body = {
             "snippet": {
-                "title": f"AI Generated Short {random.randint(1,1000)}",
-                "description": "Auto-generated via script",
-                "tags": ["AI","Shorts","Automation"]
+                "title": "AI Generated Video",
+                "description": "This video was auto-uploaded using AI 🎬",
+                "tags": ["AI", "automation", "YouTube Shorts"]
             },
             "status": {"privacyStatus": "private"}
-        },
-        media_body=MediaFileUpload(file_path)
-    )
-    response = request.execute()
-    print("✅ Uploaded:", response.get("id"))
+        }
 
-def job():
-    try:
-        video_path = generate_video()
-        upload_video(video_path)
+        media = MediaFileUpload(video_path, chunksize=-1, resumable=True, mimetype="video/*")
+        request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media)
+        response = request.execute()
+
+        print("✅ Upload complete, video ID:", response["id"])
     except Exception as e:
-        print("❌ Error:", e)
+        print("❌ Error in YouTube upload:", e)
+        traceback.print_exc()
 
-# Run once for manual execution
+# ---------------- Main ----------------
 if __name__ == "__main__":
-    job()
+    video_file = generate_video()
+    if video_file:
+        upload_to_youtube(video_file)
+    else:
+        print("⚠️ Skipping upload because video generation failed.")
+        
