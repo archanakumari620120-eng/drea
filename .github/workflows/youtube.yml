@@ -23,6 +23,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install --prefer-binary -r requirements.txt
 
+      - name: Restore token.json
+        run: echo '${{ secrets.YT_TOKEN }}' > token.json
+
       - name: Run video generation + upload
         run: |
           echo "✅ Script started..."
