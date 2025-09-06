@@ -24,15 +24,14 @@ jobs:
           pip install --prefer-binary -r requirements.txt
 
       - name: Write secrets to files
-        run: |
-          echo "$TOKEN_JSON" > token.json
-          echo "$CONFIG_JSON" > config.json
-          echo "$CLIENT_SECRET_JSON" > client_secret.json
-        shell: bash
         env:
           TOKEN_JSON: ${{ secrets.TOKEN_JSON }}
           CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
           CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+        run: |
+          echo "$TOKEN_JSON" > token.json
+          echo "$CONFIG_JSON" > config.json
+          echo "$CLIENT_SECRET_JSON" > client_secret.json
 
       - name: Run video generation + upload
         run: |
