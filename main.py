@@ -1,94 +1,97 @@
 import os
 import random
-import datetime
-import requests
+import time
+import json
+import schedule
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
+from PIL import Image
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
-# ---------- CONFIG ----------
-IMAGE_FOLDER = "images"
-MUSIC_FOLDER = "music"
-TEMP_VIDEO = "temp_video.mp4"
-TOKEN_FILE = "token.json"
-CONFIG_FILE = "config.json"
+# ===== Load Config =====
+with open("config.json", "r") as f:
+    config = json.load(f)
 
-# Prompts pool (random topic har bar)
-PROMPTS = [
-    "Stay positive, work hard, and make it happen!",
-    "Success is the sum of small efforts repeated every day.",
-    "Never give up, great things take time.",
-    "Push yourself, because no one else is going to do it for you.",
-    "Dream big, start small, act now.",
+# ===== YouTube Auth =====
+def get_youtube_service():
+    creds = Credentials.from_authorized_user_file("token.json", ["https://www.googleapis.com/auth/youtube.upload"])
+    return build("youtube", "v3", credentials=creds)
+
+# ===== Random Prompt Generator =====
+prompts = [
+    "Never give up on your dreams, success is closer than you think.",
+    "Aaj ek nayi shuruaat karo – chhoti jeet badi jeet banegi.",
     "Discipline is the bridge between goals and accomplishment.",
-    "Your only limit is your mind.",
-    "Do something today that your future self will thank you for.",
-    "Don’t stop when you’re tired, stop when you’re done."
+    "Smile more, stress less, and make today count.",
+    "Learn daily, grow daily – zindagi wahi hai jo aap banaate ho.",
+    "Your vibe attracts your tribe – positive raho, positive milega.",
+    "Hard work beats talent when talent doesn’t work hard.",
+    "Khud pe vishwas rakho, duniya aapke peeche chalegi."
 ]
 
-# ---------- FUNCTIONS ----------
-def get_random_image():
-    if not os.path.exists(IMAGE_FOLDER):
-        raise Exception("❌ images folder missing!")
-    images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER)]
-    if not images:
-        raise Exception("❌ No images found in images/")
-    return random.choice(images)
+def get_random_prompt():
+    return random.choice(prompts)
 
-def get_random_music():
-    if not os.path.exists(MUSIC_FOLDER):
-        raise Exception("❌ music folder missing!")
-    music = [os.path.join(MUSIC_FOLDER, f) for f in os.listdir(MUSIC_FOLDER)]
-    if not music:
-        raise Exception("❌ No music found in music/")
-    return random.choice(music)
+# ===== Video Generator =====
+def generate_video():
+    img_file = random.choice(os.listdir("images"))
+    img_path = os.path.join("images", img_file)
 
-def create_video(image_path, music_path, output_path):
-    clip = ImageClip(image_path).set_duration(30).resize((1080, 1920))
-    audio = AudioFileClip(music_path).subclip(0, 30)
-    final = clip.set_audio(audio)
-    final.write_videofile(output_path, fps=24)
-    return output_path
+    # --- Fix for PIL ANTIALIAS error ---
+    img = Image.open(img_path)
+    try:
+        img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
+    except AttributeError:
+        img = img.resize((1080, 1920), Image.ANTIALIAS)
+    img.save("temp.jpg")
 
-def upload_to_youtube(video_path, title, description, tags):
-    creds = Credentials.from_authorized_user_file(TOKEN_FILE, ["https://www.googleapis.com/auth/youtube.upload"])
-    youtube = build("youtube", "v3", credentials=creds)
+    # Music select
+    music_file = random.choice(os.listdir("music"))
+    music_path = os.path.join("music", music_file)
 
+    # Make clip
+    img_clip = ImageClip("temp.jpg").set_duration(30)
+    audio_clip = AudioFileClip(music_path).subclip(0, 30)
+    final_clip = img_clip.set_audio(audio_clip)
+
+    final_path = "final_video.mp4"
+    final_clip.write_videofile(final_path, fps=24)
+    return final_path
+
+# ===== Upload Function =====
+def upload_video():
+    youtube = get_youtube_service()
+    video_path = generate_video()
+
+    title = f"{get_random_prompt()} #{random.randint(1000,9999)}"
+    description = "Auto-generated motivational & lifestyle shorts. Stay inspired!"
     request_body = {
         "snippet": {
             "title": title,
             "description": description,
-            "tags": tags,
+            "tags": ["motivation", "shorts", "inspiration", "life"],
             "categoryId": "22"
         },
-        "status": {"privacyStatus": "public"}
+        "status": {
+            "privacyStatus": "public",
+            "selfDeclaredMadeForKids": False
+        }
     }
 
-    media = MediaFileUpload(video_path, chunksize=-1, resumable=True, mimetype="video/mp4")
+    media = MediaFileUpload(video_path, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media)
     response = request.execute()
-    print("✅ Uploaded:", response["id"])
+    print("✅ Uploaded:", response.get("id"))
 
-# ---------- MAIN ----------
-if __name__ == "__main__":
-    try:
-        prompt = random.choice(PROMPTS)
-        image = get_random_image()
-        music = get_random_music()
+    os.remove(video_path)
+    os.remove("temp.jpg")
 
-        video = create_video(image, music, TEMP_VIDEO)
+# ===== Scheduler =====
+schedule.every(5).hours.do(upload_video)
 
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        title = f"{prompt} | Shorts #{random.randint(1000,9999)}"
-        description = f"{prompt}\n\nUploaded at {now}"
-        tags = ["motivation", "shorts", "inspiration", "life", "success"]
-
-        upload_to_youtube(video, title, description, tags)
-
-        os.remove(video)
-        print("🎉 Done! One video uploaded successfully.")
-
-    except Exception as e:
-        print("❌ Error:", str(e))
-        
+print("🚀 Auto YouTube Upload started... (every 5 hours)")
+while True:
+    schedule.run_pending()
+    time.sleep(60)
+    
