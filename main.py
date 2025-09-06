@@ -88,10 +88,6 @@ def job():
     file_path = generate_video()
     if file_path:
         upload_video(file_path)
-
 if __name__ == "__main__":
-    job()
-    # schedule.every(5).hours.do(job)  # for automation
-    # while True:
-    #     schedule.run_pending()
-    #     time.sleep(60)
+    job()  # ek video generate + upload
+    
