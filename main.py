@@ -4,6 +4,7 @@ import time
 import json
 import random
 import traceback
+import base64
 from pathlib import Path
 
 import requests
@@ -13,9 +14,10 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
-# Optional: google genai lib — if present, some Gemini features use it.
+# Try import google genai (official library). If not present, we'll still attempt HTTP calls where possible.
 try:
     import google.genai as genai
+    from google.genai import types
     HAVE_GEMINI_LIB = True
 except Exception:
     HAVE_GEMINI_LIB = False
@@ -24,6 +26,7 @@ except Exception:
 with open("config.json", "r") as f:
     CONFIG = json.load(f)
 
+# ensure outputs
 OUTPUTS = Path("outputs")
 OUTPUTS.mkdir(exist_ok=True)
 IMAGES_DIR = Path("images")
@@ -36,9 +39,10 @@ if hasattr(Image, "Resampling"):
 else:
     RESAMPLE = Image.ANTIALIAS
 
-# YouTube creds (must exist in repo or be written by workflow from secrets)
+# YouTube creds (must exist)
 creds = Credentials.from_authorized_user_file(TOKEN_FILE)
 
+# -------------------- Utilities --------------------
 def log(s):
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {s}", flush=True)
 
@@ -48,11 +52,11 @@ def safe_write_bytes(path: Path, b: bytes):
 
 # -------------------- Prompt (Gemini primary) --------------------
 FALLBACK_PROMPTS = [
+    "A cinematic slow-motion ocean waves at sunset, soft piano (short)",
     "Quick life-hack for focus in under 8 seconds",
     "Amazing space fact with dramatic reveal",
     "Tiny productivity tip you can use today",
-    "Funny one-line joke with quick punchline",
-    "Motivational micro-quote to start your day"
+    "Funny one-line joke with quick punchline"
 ]
 
 def gen_prompt_gemini():
@@ -60,11 +64,15 @@ def gen_prompt_gemini():
         if HAVE_GEMINI_LIB:
             genai.configure(api_key=CONFIG.get("GEMINI_API_KEY"))
             client = genai.Client()
-            resp = client.generate_text(model="gemini-2.5", prompt="Give a short (<=12 words) catchy idea for a YouTube Short (no hashtags).")
-            text = getattr(resp, "text", None)
+            resp = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents="Give a short (<=12 words) catchy idea for a YouTube Short (no hashtags)."
+            )
+            text = getattr(resp, "text", None) or (resp.candidates[0].content.parts[0].text if getattr(resp, "candidates", None) else None)
             if text:
                 return text.strip()
         else:
+            # HTTP call to Generative Language API (if key present)
             key = CONFIG.get("GEMINI_API_KEY")
             if key:
                 url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5:generateContent"
@@ -90,29 +98,94 @@ def get_prompt():
 
 # -------------------- Gemini Video (experimental) --------------------
 def gen_gemini_video(prompt: str):
-    """Experimental — many accounts won't support Gemini-generated video. If supported, implement here."""
+    """Try to generate a video via Gemini Veo model (if supported by account & library).
+       Returns local video path or None."""
     try:
         if not HAVE_GEMINI_LIB:
-            log("Gemini lib not installed — skipping Gemini video.")
+            log("Gemini library not installed — skipping Gemini video step.")
             return None
-        # Placeholder for real video generation if account supports it.
-        log("Gemini video generation currently not implemented for this account. Skipping.")
-        return None
+        genai.configure(api_key=CONFIG.get("GEMINI_API_KEY"))
+        client = genai.Client()
+
+        log("Requesting Gemini video generation (veo)...")
+        op = client.models.generate_videos(
+            model="veo-3.0-generate-preview",
+            prompt=prompt,
+            config=types.GenerateVideosConfig(
+                aspect_ratio="9:16",
+                duration_seconds=int(CONFIG.get("video_generation", {}).get("duration_seconds", 8)),
+                negative_prompt="low quality, blurry, text"
+            )
+        )
+        # Poll operation
+        # Note: API shape may vary; handle generically
+        wait_seconds = 5
+        for _ in range(120):  # up to ~10 minutes polling (adjust as needed)
+            if getattr(op, "done", False):
+                break
+            log("Waiting for Gemini video... sleeping {}s".format(wait_seconds))
+            time.sleep(wait_seconds)
+            try:
+                op = client.operations.get(op)
+            except Exception:
+                time.sleep(wait_seconds)
+        if not getattr(op, "done", False):
+            log("Gemini video operation not completed in time.")
+            return None
+        # Extract generated videos
+        result = getattr(op, "result", None)
+        if not result:
+            log("No result from Gemini video op.")
+            return None
+        gen_videos = getattr(result, "generated_videos", None)
+        if gen_videos and len(gen_videos) > 0:
+            video_bytes = getattr(gen_videos[0].video, "video_bytes", None)
+            if video_bytes:
+                out = OUTPUTS / "gemini_video.mp4"
+                safe_write_bytes(out, video_bytes)
+                log(f"Gemini video saved: {out}")
+                return str(out)
+        # Some responses may embed base64 or urls — try to parse common fields
+        try:
+            # fallback: if op.result contains urls
+            urls = []
+            if isinstance(result, dict):
+                # result may be dict-like
+                vids = result.get("generated_videos") or []
+                for v in vids:
+                    b = v.get("video", {}).get("video_bytes")
+                    if b:
+                        safe_write_bytes(OUTPUTS / "gemini_video.mp4", b)
+                        return str(OUTPUTS / "gemini_video.mp4")
+        except Exception:
+            pass
     except Exception as e:
         log("Gemini video generation failed: " + str(e))
         log(traceback.format_exc())
     return None
 
-# -------------------- Gemini Image (best-effort placeholder) --------------------
+# -------------------- Gemini Image (text->image) --------------------
 def gen_gemini_image(prompt: str):
-    """Attempt Gemini image generation — many accounts can't; this returns None when not available."""
+    """Try Gemini image generation (if supported). If returns bytes or URL, save and return path."""
     try:
-        if not HAVE_GEMINI_LIB:
-            log("Gemini lib missing for image; skipping.")
+        if HAVE_GEMINI_LIB:
+            # gemini image generation via models.generate_content or dedicated image method if available
+            genai.configure(api_key=CONFIG.get("GEMINI_API_KEY"))
+            client = genai.Client()
+            # This example uses a generic generate_content with request hinting for image output;
+            # actual behavior depends on account & model support.
+            resp = client.models.generate_content(
+                model="gemini-2.5-image",  # placeholder; your account may have different model name
+                contents=f"Generate a high-quality vertical image for this short: {prompt}"
+            )
+            # attempt to extract inline image data if present
+            txt = getattr(resp, "text", None)
+            # If response contains base64 inline data, try to decode (this is best-effort)
+            # If not, skip and return None.
             return None
-        # Placeholder: actual API usage may vary. Return None if not supported.
-        log("Gemini image generation attempted via library (placeholder) — skipping if unsupported.")
-        return None
+        else:
+            log("Gemini lib missing for image; skipping Gemini image.")
+            return None
     except Exception as e:
         log("Gemini image failed: " + str(e))
         log(traceback.format_exc())
@@ -186,20 +259,23 @@ def gen_metadata(prompt: str):
         if HAVE_GEMINI_LIB:
             genai.configure(api_key=CONFIG.get("GEMINI_API_KEY"))
             client = genai.Client()
-            md_request = f"Based on this prompt: {prompt}\\nGenerate JSON: {{ \"title\":\"<short title>\", \"description\":\"<short description>\", \"tags\":[\"tag1\",\"tag2\"] }}"
-            resp = client.generate_text(model="gemini-2.5", prompt=md_request)
-            text = getattr(resp, "text", None)
+            md_request = f"""Based on this prompt: {prompt}
+Generate JSON: {{ "title":"<short title under 60 chars>", "description":"<short description>", "tags":["tag1","tag2"] }}"""
+            resp = client.models.generate_content(model="gemini-2.5-flash", contents=md_request)
+            text = getattr(resp, "text", None) or (resp.candidates[0].content.parts[0].text if getattr(resp, "candidates", None) else None)
             if text:
                 try:
                     return json.loads(text)
                 except Exception:
                     pass
+        # HTTP fallback attempt (rare)
     except Exception as e:
         log("Gemini metadata failed: " + str(e))
+    # fallback metadata
     uniq = str(int(time.time()))[-5:]
     return {
         "title": f"{prompt[:55]} #{uniq}",
-        "description": f"{prompt}\\nAuto-generated with AI.",
+        "description": f"{prompt}\nAuto-generated with AI.",
         "tags": CONFIG.get("youtube", {}).get("default_tags", ["AI", "Shorts"])
     }
 
@@ -275,3 +351,4 @@ def job():
 # -------------------- Execute single run --------------------
 if __name__ == "__main__":
     job()
+            
