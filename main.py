@@ -54,7 +54,7 @@ def prompt_from_gemini():
     if not GEMINI_API_KEY:
         return None
     try:
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5:generateContent"
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
         payload = {"contents":[{"parts":[{"text":"Give a short catchy idea for a YouTube Short (<=12 words)."}]}]}
         r = requests.post(url, params={"key":GEMINI_API_KEY}, json=payload, timeout=20)
         r.raise_for_status()
