@@ -11,10 +11,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v3
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@13ae6addf04891f7a5c391fa3efb2f4d5f38e819 # v4
       with:
         python-version: "3.10"
 
@@ -30,3 +31,4 @@ jobs:
 
     - name: Run main script
       run: python main.py
+      
