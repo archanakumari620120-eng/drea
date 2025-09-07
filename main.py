@@ -18,7 +18,7 @@ with open("config.json","r") as f:
 
 OUTPUTS=Path("outputs");OUTPUTS.mkdir(exist_ok=True)
 IMAGES_DIR=Path("images");MUSIC_DIR=Path("music")
-TOKEN_FILE="TOKEN_JSON"
+TOKEN_FILE="token.json"
 
 if hasattr(Image,"Resampling"):
     RESAMPLE=Image.Resampling.LANCZOS
