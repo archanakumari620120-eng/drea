@@ -10,6 +10,9 @@ from google.oauth2.credentials import Credentials
 try:
     import google.genai as genai
     HAVE_GEMINI_LIB = True
+    # YouTube Auth
+creds = Credentials.from_authorized_user_file("token.json")
+
 except Exception:
     HAVE_GEMINI_LIB = False
 
