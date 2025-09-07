@@ -1,0 +1,9 @@
+{
+  "gemini_api_key": "AIzaSyC2v0-EXAMPLE-GEMINI-KEY",
+  "huggingface_token": "hf_EXAMPLETOKEN123456789",
+  "pexels_api_key": "563492AD-EXAMPLE-PEXELS-KEY",
+  "youtube": {
+    "client_secrets_file": "client_secret.json",
+    "redirect_port": 8081
+  }
+}
