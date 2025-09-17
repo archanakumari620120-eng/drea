@@ -1,34 +1,37 @@
-name: Auto YouTube Upload
+name: build
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "0 9 * * *"   # रोज़ सुबह 9 बजे चलेगा (UTC time)
-  workflow_dispatch:       # Manual run option
+    - cron: "0 */5 * * *"   # Har 5 ghante me chalega
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.2.0
         with:
           python-version: "3.10"
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install moviepy diffusers torch torchvision torchaudio yt-dlp google-auth google-auth-oauthlib google-api-python-client pillow
-
-      - name: Create Secrets Files
+          pip install --prefer-binary -r requirements.txt
+      - name: Write secrets to files
+        env:
+          TOKEN_JSON: ${{ secrets.TOKEN_JSON }}
+          CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
         run: |
-          echo '${{ secrets.CLIENT_SECRET_JSON }}' > client_secret.json
-          echo '${{ secrets.TOKEN_JSON }}' > token.json
-
-      - name: Run Automation
+          echo "$TOKEN_JSON" > token.json
+          echo "$CONFIG_JSON" > config.json
+          echo "$CLIENT_SECRET_JSON" > client_secret.json
+      - name: Run video generation + upload
         run: |
+          echo "✅ Script started..."
           python main.py
-          
