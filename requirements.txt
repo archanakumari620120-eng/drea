@@ -10,3 +10,4 @@ gTTS
 diffusers
 torch
 transformers
+yt_dlp
