@@ -1,231 +1,153 @@
-# main.py - Final uploader (single run). Scheduler handled by GitHub Actions.
-import os, json, time, random, traceback
-from pathlib import Path
-import requests
-from PIL import Image
+import os
+import random
+import yt_dlp
 from moviepy.editor import ImageClip, AudioFileClip
+from diffusers import StableDiffusionPipeline
+import torch
+from PIL import Image, ImageDraw
+from datetime import datetime
+import google.auth.transport.requests
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
-OUTPUTS = Path("outputs")
-OUTPUTS.mkdir(exist_ok=True)
-IMAGES_DIR = Path("images")
-MUSIC_DIR = Path("music")
-TOKEN_PATH = "token.json"
+# 📂 Directories
+IMAGES_DIR = "images"
+MUSIC_DIR = "music"
+VIDEOS_DIR = "videos"
+os.makedirs(IMAGES_DIR, exist_ok=True)
+os.makedirs(MUSIC_DIR, exist_ok=True)
+os.makedirs(VIDEOS_DIR, exist_ok=True)
 
-# Load env or config
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HF_API_KEY")
-if os.path.exists("config.json"):
+# 🎯 Config
+video_duration = 10
+topic = "Motivational Quotes"
+SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+
+# 🤖 AI pipeline
+device = "cuda" if torch.cuda.is_available() else "cpu"
+pipe = StableDiffusionPipeline.from_pretrained(
+    "runwayml/stable-diffusion-v1-5",
+    torch_dtype=torch.float32
+).to(device)
+
+# 🖼️ Image generation
+def generate_image(i):
     try:
-        cfg = json.load(open("config.json"))
-        GEMINI_API_KEY = GEMINI_API_KEY or cfg.get("GEMINI_API_KEY") or cfg.get("gemini_api_key")
-        HF_TOKEN = HF_TOKEN or cfg.get("HF_API_KEY") or cfg.get("hf_token")
-    except Exception:
-        pass
-
-# Pillow resampling safe
-try:
-    from PIL import Image as PILImage
-    RESAMPLE = PILImage.Resampling.LANCZOS if hasattr(PILImage, "Resampling") else PILImage.ANTIALIAS
-except Exception:
-    RESAMPLE = None
-
-if not os.path.exists(TOKEN_PATH):
-    raise FileNotFoundError("token.json not found. Put it via GitHub secret TOKEN_JSON or place locally.")
-creds = Credentials.from_authorized_user_file(TOKEN_PATH)
-
-def log(msg):
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
-
-def safe_write(path, b):
-    with open(path, "wb") as f:
-        f.write(b)
-
-FALLBACK_PROMPTS = [
-    "Never give up!",
-    "Quick life-hack to stay focused",
-    "Amazing tiny fact about space",
-    "One motivational tip in 15 seconds"
-]
-
-def prompt_from_gemini():
-    if not GEMINI_API_KEY:
-        return None
-    try:
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
-        payload = {"contents":[{"parts":[{"text":"Give a short catchy idea for a YouTube Short (<=12 words)."}]}]}
-        r = requests.post(url, params={"key":GEMINI_API_KEY}, json=payload, timeout=20)
-        r.raise_for_status()
-        data = r.json()
-        cand = data.get("candidates") or []
-        if cand:
-            text = cand[0].get("content", {}).get("parts", [])[0].get("text")
-            if text:
-                return text.strip()
-    except Exception as e:
-        log("Gemini prompt error: " + str(e))
-    return None
-
-def prompt_from_hf():
-    if not HF_TOKEN:
-        return None
-    try:
-        url = "https://api-inference.huggingface.co/models/gpt2"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        payload = {"inputs":"Give a short catchy idea for a YouTube Short (<=12 words)."}
-        r = requests.post(url, headers=headers, json=payload, timeout=20)
-        if r.ok:
-            out = r.json()
-            if isinstance(out, list) and out and "generated_text" in out[0]:
-                return out[0]["generated_text"].strip()
-            if isinstance(out, dict) and "generated_text" in out:
-                return out["generated_text"].strip()
-    except Exception as e:
-        log("HF prompt error: " + str(e))
-    return None
-
-def get_prompt():
-    p = prompt_from_gemini()
-    if p:
-        return p
-    p = prompt_from_hf()
-    if p:
-        return p
-    return random.choice(FALLBACK_PROMPTS)
-
-def image_from_gemini(prompt):
-    if not GEMINI_API_KEY:
-        return None
-    try:
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-image:generateImage"
-        payload = {"prompt": prompt}
-        r = requests.post(url, params={"key": GEMINI_API_KEY}, json=payload, timeout=60)
-        if r.ok:
-            data = r.json()
-            img_url = data.get("image") or data.get("url")
-            if img_url:
-                b = requests.get(img_url, timeout=30).content
-                out = OUTPUTS / "gemini_img.jpg"
-                safe_write(out, b)
-                return str(out)
-            b64 = data.get("b64") or data.get("image_b64")
-            if b64:
-                import base64
-                safe_write(OUTPUTS / "gemini_img.jpg", base64.b64decode(b64))
-                return str(OUTPUTS / "gemini_img.jpg")
-    except Exception as e:
-        log("Gemini image error: " + str(e))
-    return None
-
-def image_from_hf(prompt):
-    if not HF_TOKEN:
-        return None
-    try:
-        url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        r = requests.post(url, headers=headers, json={"inputs": prompt}, timeout=60)
-        if r.status_code == 200:
-            out = OUTPUTS / "hf_img.jpg"
-            safe_write(out, r.content)
-            return str(out)
+        prompt = f"Viral YouTube Short image about {topic}"
+        result = pipe(prompt, height=512, width=512, num_inference_steps=20)
+        if result and hasattr(result, "images") and len(result.images) > 0:
+            image = result.images[0]
         else:
-            log(f"HF image failed status {r.status_code}: {r.text[:200]}")
+            raise ValueError("No image from diffusion pipeline")
+        path = os.path.join(IMAGES_DIR, f"image_{i}.png")
+        image.save(path)
+        return path
     except Exception as e:
-        log("HF image exception: " + str(e))
+        print(f"⚠️ Image generation failed: {e}")
+        fallback = Image.new("RGB", (512, 512), color=(0, 0, 0))
+        d = ImageDraw.Draw(fallback)
+        d.text((50, 250), f"Video {i} - {topic}", fill=(255, 255, 255))
+        path = os.path.join(IMAGES_DIR, f"image_fallback_{i}.png")
+        fallback.save(path)
+        return path
+
+# 🎵 Music
+def download_music():
+    url = "https://www.youtube.com/watch?v=2OEL4P1Rz04"
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": os.path.join(MUSIC_DIR, "music.%(ext)s"),
+        "quiet": True,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }],
+    }
+    try:
+        yt_dlp.YoutubeDL(ydl_opts).download([url])
+        print("✅ Downloaded copyright free music")
+    except Exception as e:
+        print(f"⚠️ Music download failed: {e}")
+
+def get_music():
+    files = [f for f in os.listdir(MUSIC_DIR) if f.endswith(".mp3")]
+    if not files:
+        download_music()
+        files = [f for f in os.listdir(MUSIC_DIR) if f.endswith(".mp3")]
+    if files:
+        return os.path.join(MUSIC_DIR, random.choice(files))
     return None
 
-def pick_local_image():
-    if not IMAGES_DIR.exists():
-        return None
-    imgs = [p for p in IMAGES_DIR.iterdir() if p.suffix.lower() in ('.jpg','.jpeg','.png','.webp')]
-    return str(random.choice(imgs)) if imgs else None
-
-def generate_image(prompt):
-    img = image_from_gemini(prompt)
-    if img:
-        return img
-    img = image_from_hf(prompt)
-    if img:
-        return img
-    return pick_local_image()
-
-def pick_music():
-    if not MUSIC_DIR.exists():
-        return None
-    mus = [p for p in MUSIC_DIR.iterdir() if p.suffix.lower() in ('.mp3','.wav','.m4a')]
-    return str(random.choice(mus)) if mus else None
-
-def build_video(image_path, music_path, duration=15):
+# 🎬 Video creation
+def create_video(i, img, audio):
     try:
-        img = Image.open(image_path).convert('RGB')
-        if RESAMPLE:
-            img = img.resize((1080,1920), RESAMPLE)
-        else:
-            img = img.resize((1080,1920))
-        frame = OUTPUTS / 'frame.jpg'
-        img.save(frame, quality=90)
-
-        clip = ImageClip(str(frame)).set_duration(duration)
-        audio = AudioFileClip(music_path).subclip(0, duration)
-        clip = clip.set_audio(audio)
-
-        out = OUTPUTS / f'short_{int(time.time())}.mp4'
-        clip.write_videofile(str(out), fps=30, codec='libx264', audio_codec='aac')
-        return str(out)
+        path = os.path.join(VIDEOS_DIR, f"video_{i}.mp4")
+        clip = ImageClip(img, duration=video_duration)
+        if audio and os.path.exists(audio):
+            audio_clip = AudioFileClip(audio).volumex(0.6)
+            clip = clip.set_audio(audio_clip)
+        clip.write_videofile(path, fps=24, codec="libx264", audio_codec="aac")
+        return path
     except Exception as e:
-        log('Build video error: ' + str(e))
-        log(traceback.format_exc())
+        print(f"❌ Video creation failed: {e}")
         return None
 
-def gen_metadata(prompt):
-    title = (prompt[:55] if prompt else 'AI Short').strip()
-    uniq = str(int(time.time()))[-5:]
-    return {'title': f"{title} #{uniq}", 'description': f"Auto-generated AI Short. Prompt: {prompt}", 'tags': ['AI','shorts']}
+# 📤 YouTube Upload
+def get_youtube_service():
+    creds = None
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(google.auth.transport.requests.Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
+            creds = flow.run_local_server(port=8081)
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+    return build("youtube", "v3", credentials=creds)
 
-def upload_to_youtube(video_path, metadata):
+def upload_to_youtube(video_path, i):
     try:
-        yt = build('youtube','v3', credentials=creds)
-        body = {
-            'snippet': {
-                'title': metadata.get('title'),
-                'description': metadata.get('description'),
-                'tags': metadata.get('tags'),
-                'categoryId': '22'
+        youtube = get_youtube_service()
+        title = f"{topic} #{i}"
+        description = f"Auto-generated YouTube Shorts about {topic}.\nUploaded via automation."
+        request = youtube.videos().insert(
+            part="snippet,status",
+            body={
+                "snippet": {
+                    "title": title,
+                    "description": description,
+                    "tags": ["Motivation", "Shorts", "AI Generated"],
+                    "categoryId": "22",
+                },
+                "status": {
+                    "privacyStatus": "public",
+                    "selfDeclaredMadeForKids": False,
+                },
             },
-            'status': {'privacyStatus':'public'}
-        }
-        media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
-        req = yt.videos().insert(part='snippet,status', body=body, media_body=media)
-        log('Uploading...')
-        resp = req.execute()
-        log('Uploaded id: ' + str(resp.get('id')))
-        return resp.get('id')
+            media_body=video_path
+        )
+        response = request.execute()
+        print(f"✅ Uploaded to YouTube: https://youtu.be/{response['id']}")
     except Exception as e:
-        log('Upload error: ' + str(e))
-        log(traceback.format_exc())
-        return None
+        print(f"❌ Upload failed: {e}")
 
-def job():
-    log('=== JOB START ===')
-    prompt = get_prompt()
-    log('Prompt: ' + str(prompt))
-    img = generate_image(prompt)
-    if not img:
-        log('No image, abort.')
-        return
-    music = pick_music()
-    if not music:
-        log('No music, abort.')
-        return
-    video = build_video(img, music, duration=int(15))
-    if not video:
-        log('Video build failed.')
-        return
-    meta = gen_metadata(prompt)
-    upload_to_youtube(video, meta)
-    log('=== JOB END ===')
+# 🚀 Main automation
+def run_automation(total_videos=1):
+    for i in range(total_videos):
+        print(f"\n🎬 Starting video {i}")
+        img = generate_image(i)
+        audio = get_music()
+        video = create_video(i, img, audio)
+        if video:
+            print(f"✅ Video {i} created at {video}")
+            upload_to_youtube(video, i)
+        else:
+            print(f"❌ Video {i} failed")
+    print("\n🎉 Automation completed!")
 
-if __name__ == '__main__':
-    job()
+if __name__ == "__main__":
+    run_automation(total_videos=1)
