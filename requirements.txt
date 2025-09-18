@@ -11,3 +11,4 @@ diffusers
 torch
 transformers
 yt_dlp
+numpy
