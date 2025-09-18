@@ -1,7 +1,9 @@
 import os
 import random
 import yt_dlp
-from moviepy.editor import ImageClip, AudioFileClip, TextClip, CompositeVideoClip
+from moviepy.editor import (
+    ImageClip, AudioFileClip, TextClip, CompositeVideoClip, ColorClip
+)
 from diffusers import StableDiffusionPipeline
 import torch
 from PIL import Image, ImageDraw
@@ -23,6 +25,7 @@ os.makedirs(VIDEOS_DIR, exist_ok=True)
 video_duration = 10
 topic = "Motivational Quotes"
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+QUOTES_FILE = "quotes.txt"
 
 # 🤖 AI pipeline
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -31,18 +34,31 @@ pipe = StableDiffusionPipeline.from_pretrained(
     torch_dtype=torch.float32
 ).to(device)
 
-# ✅ Quotes list
-quotes = [
-    "Believe you can and you're halfway there. — Theodore Roosevelt",
-    "No pressure, no diamonds. — Thomas Carlyle",
-    "The purpose of our lives is to be happy. — Dalai Lama",
-    "Life isn’t about finding yourself. It’s about creating yourself. — George Bernard Shaw",
-    "Stay foolish, stay hungry. — Steve Jobs",
-    "Do what you can, with what you have, where you are. — Theodore Roosevelt",
-    "Keep smiling because life is a beautiful thing and there’s so much to smile about. — Marilyn Monroe",
-    "It always seems impossible until it’s done. — Nelson Mandela",
-    # agar chahe to aur quotes add karo
-]
+# ✅ Load quotes from file (or fallback list)
+def load_quotes():
+    if os.path.exists(QUOTES_FILE):
+        try:
+            with open(QUOTES_FILE, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            # strip newlines and ignore empty lines
+            quotes_list = [line.strip() for line in lines if line.strip()]
+            if quotes_list:
+                return quotes_list
+        except Exception as e:
+            print(f"⚠️ Could not read quotes file: {e}")
+    # fallback
+    return [
+        "Believe you can and you're halfway there. — Theodore Roosevelt",
+        "No pressure, no diamonds. — Thomas Carlyle",
+        "The purpose of our lives is to be happy. — Dalai Lama",
+        "Life isn’t about finding yourself. It’s about creating yourself. — George Bernard Shaw",
+        "Stay foolish, stay hungry. — Steve Jobs",
+        "Do what you can, with what you have, where you are. — Theodore Roosevelt",
+        "Keep smiling because life is a beautiful thing and there’s so much to smile about. — Marilyn Monroe",
+        "It always seems impossible until it’s done. — Nelson Mandela"
+    ]
+
+quotes = load_quotes()
 
 # 🎵 Music download
 def download_music():
@@ -72,34 +88,22 @@ def get_music():
         return os.path.join(MUSIC_DIR, random.choice(files))
     return None
 
-# 🖼️ Helpers
-
+# 🖼️ Helper: resize with LANCZOS to avoid edge cuts
 def resize_image_with_lanczos(img_path, target_w, target_h, i):
-    """
-    Resize the image to fit within (target_w, target_h) maintaining aspect ratio,
-    using high-quality resampling (LANCZOS), to avoid edge cutting and quality loss.
-    Returns path of resized image.
-    """
-    # Open with PIL
     img = Image.open(img_path).convert("RGB")
     img_w, img_h = img.size
-
-    # Compute scaling ratio
     scale = min(target_w / img_w, target_h / img_h)
     new_w = int(img_w * scale)
     new_h = int(img_h * scale)
-
-    # Use LANCZOS or Resampling.LANCZOS depending on pillow version
     try:
         resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
     except AttributeError:
         resized = img.resize((new_w, new_h), Image.LANCZOS)
-
     resized_path = os.path.join(IMAGES_DIR, f"resized_{i}.png")
     resized.save(resized_path)
     return resized_path
 
-# 🖼️ Image generation with fallback and proper resizing
+# 🖼️ Image generation
 def generate_image(i):
     try:
         prompt = f"Beautiful high resolution background for {topic}"
@@ -114,49 +118,42 @@ def generate_image(i):
     except Exception as e:
         print(f"⚠️ Image generation failed: {e}")
         fallback = Image.new("RGB", (1080, 1920), color=(30, 30, 30))
-        draw = ImageDraw.Draw(fallback)
         fallback_path = os.path.join(IMAGES_DIR, f"fallback_sd_{i}.jpg")
         fallback.save(fallback_path)
         return fallback_path
 
-# 🎬 Video creation (with quote overlay, no text cut, clear)
+# 🎬 Video creation
 def create_video(i, img_path, audio_path, quote_text):
     try:
         video_path = os.path.join(VIDEOS_DIR, f"video_{i}.mp4")
-        target_w, target_h = 1080, 1920  # video resolution (vertical)
+        target_w, target_h = 1080, 1920  # vertical video
 
-        # First, generate or get image
-        # Resize it properly to avoid cutting
         resized_img_path = resize_image_with_lanczos(img_path, target_w, target_h, i)
 
-        # Make clip from resized image
-        clip = ImageClip(resized_img_path).set_duration(video_duration)
+        img_clip = ImageClip(resized_img_path).set_duration(video_duration)
+        img_clip = img_clip.set_position(("center", "center"))
 
-        # Create black background
-        from moviepy.video.fx.all import margin
-        bg = ImageClip(color=(0,0,0), size=(target_w, target_h)).set_duration(video_duration)
-        clip = clip.set_position(("center","center"))
-        final_img_clip = CompositeVideoClip([bg, clip])
+        bg_clip = ColorClip(size=(target_w, target_h), color=(0, 0, 0)).set_duration(video_duration)
 
-        # Slight dark overlay for text clarity
+        final_img_clip = CompositeVideoClip([bg_clip, img_clip])
+
         final_img_clip = final_img_clip.fl_image(lambda frame: (frame * 0.8).astype('uint8'))
 
-        # Text overlay
         txt = (TextClip(
-                    quote_text,
-                    fontsize=70,
-                    font="Arial-Bold",  # ya tumhare machine pe installed font
-                    color='white',
-                    stroke_color='black',
-                    stroke_width=2,
-                    method='caption',
-                    size=(int(target_w * 0.8), None),  # text width 80%
-                    align='center'
-                )
-               .set_position(('center', 'bottom'))
-               .set_duration(video_duration)
-               .margin(bottom=100)
-              )
+            quote_text,
+            fontsize=70,
+            font="Arial-Bold",  # ensure this font exists, else change
+            color='white',
+            stroke_color='black',
+            stroke_width=2,
+            method='caption',
+            size=(int(target_w * 0.8), None),
+            align='center'
+        )
+        .set_position(('center', 'bottom'))
+        .set_duration(video_duration)
+        .margin(bottom=100)
+        )
 
         video = CompositeVideoClip([final_img_clip, txt])
 
@@ -179,7 +176,7 @@ def create_video(i, img_path, audio_path, quote_text):
         print(f"❌ Video creation failed: {e}")
         return None
 
-# 📤 YouTube Upload parts (as before)
+# YouTube upload parts as before
 def get_youtube_service():
     creds = None
     if os.path.exists("token.json"):
@@ -220,7 +217,6 @@ def upload_to_youtube(video_path, i):
     except Exception as e:
         print(f"❌ Upload failed: {e}")
 
-# 🚀 Main automation
 def run_automation(total_videos=1):
     for i in range(total_videos):
         print(f"\n🎬 Creating video {i}")
