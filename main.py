@@ -72,27 +72,49 @@ def get_music():
         return os.path.join(MUSIC_DIR, random.choice(files))
     return None
 
+# 🖼️ Helpers
+
+def resize_image_with_lanczos(img_path, target_w, target_h, i):
+    """
+    Resize the image to fit within (target_w, target_h) maintaining aspect ratio,
+    using high-quality resampling (LANCZOS), to avoid edge cutting and quality loss.
+    Returns path of resized image.
+    """
+    # Open with PIL
+    img = Image.open(img_path).convert("RGB")
+    img_w, img_h = img.size
+
+    # Compute scaling ratio
+    scale = min(target_w / img_w, target_h / img_h)
+    new_w = int(img_w * scale)
+    new_h = int(img_h * scale)
+
+    # Use LANCZOS or Resampling.LANCZOS depending on pillow version
+    try:
+        resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    except AttributeError:
+        resized = img.resize((new_w, new_h), Image.LANCZOS)
+
+    resized_path = os.path.join(IMAGES_DIR, f"resized_{i}.png")
+    resized.save(resized_path)
+    return resized_path
+
 # 🖼️ Image generation with fallback and proper resizing
 def generate_image(i):
     try:
         prompt = f"Beautiful high resolution background for {topic}"
-        # Tumhare prompt waise hi use karo
         result = pipe(prompt, height=768, width=768, num_inference_steps=25)
         if result and hasattr(result, "images") and len(result.images) > 0:
             image = result.images[0]
         else:
             raise ValueError("No image from diffusion pipeline")
-        # Save high-res image
         path = os.path.join(IMAGES_DIR, f"sd_image_{i}.png")
         image.save(path)
         return path
     except Exception as e:
         print(f"⚠️ Image generation failed: {e}")
-        # fallback: plain background
         fallback = Image.new("RGB", (1080, 1920), color=(30, 30, 30))
         draw = ImageDraw.Draw(fallback)
-        # optional: draw topic or simple text
-        # draw.text((50, 900), topic, fill=(255,255,255))
         fallback_path = os.path.join(IMAGES_DIR, f"fallback_sd_{i}.jpg")
         fallback.save(fallback_path)
         return fallback_path
@@ -101,67 +123,63 @@ def generate_image(i):
 def create_video(i, img_path, audio_path, quote_text):
     try:
         video_path = os.path.join(VIDEOS_DIR, f"video_{i}.mp4")
-        
-        # Load image
-        clip = ImageClip(img_path).set_duration(video_duration)
-        
-        # Ensure full frame without cut: resize and pad if needed
-        # Suppose want video size 1080x1920 (vertical Short). Adjust if different.
-        target_w, target_h = 1080, 1920
-        
-        # Resize image maintaining aspect ratio
-        img_w, img_h = clip.w, clip.h
-        # scale to fit either width or height
-        scale = min(target_w / img_w, target_h / img_h)
-        new_w = int(img_w * scale)
-        new_h = int(img_h * scale)
-        clip = clip.resize((new_w, new_h))
-        
-        # Pad black bars if image does not fill
+        target_w, target_h = 1080, 1920  # video resolution (vertical)
+
+        # First, generate or get image
+        # Resize it properly to avoid cutting
+        resized_img_path = resize_image_with_lanczos(img_path, target_w, target_h, i)
+
+        # Make clip from resized image
+        clip = ImageClip(resized_img_path).set_duration(video_duration)
+
+        # Create black background
         from moviepy.video.fx.all import margin
-        # Create a background clip of target size
         bg = ImageClip(color=(0,0,0), size=(target_w, target_h)).set_duration(video_duration)
-        # Position the resized image in center of bg
         clip = clip.set_position(("center","center"))
         final_img_clip = CompositeVideoClip([bg, clip])
-        
-        # Darken the image background behind text so overlay text visible
+
+        # Slight dark overlay for text clarity
         final_img_clip = final_img_clip.fl_image(lambda frame: (frame * 0.8).astype('uint8'))
-        
+
         # Text overlay
         txt = (TextClip(
                     quote_text,
                     fontsize=70,
-                    font="Arial-Bold",  # ya tumhare system me strong readable font
+                    font="Arial-Bold",  # ya tumhare machine pe installed font
                     color='white',
                     stroke_color='black',
                     stroke_width=2,
                     method='caption',
-                    size=(int(target_w * 0.8), None),  # width 80% of video width
+                    size=(int(target_w * 0.8), None),  # text width 80%
                     align='center'
                 )
                .set_position(('center', 'bottom'))
                .set_duration(video_duration)
-               .margin(bottom=100)  # 100 px gap from bottom
+               .margin(bottom=100)
               )
-        
+
         video = CompositeVideoClip([final_img_clip, txt])
-        
+
         if audio_path and os.path.exists(audio_path):
             audio_clip = AudioFileClip(audio_path).volumex(0.5)
             video = video.set_audio(audio_clip)
-        
-        # Export
-        video.write_videofile(video_path, fps=24, codec="libx264", audio_codec="aac", 
-                              preset="medium", threads=4, ffmpeg_params=["-crf", "20"])
-        # crf low means better quality; tweak as needed
+
+        video.write_videofile(
+            video_path,
+            fps=24,
+            codec="libx264",
+            audio_codec="aac",
+            preset="medium",
+            threads=4,
+            ffmpeg_params=["-crf", "20"]
+        )
         print("✅ Video created:", video_path)
         return video_path
     except Exception as e:
         print(f"❌ Video creation failed: {e}")
         return None
 
-# 📤 YouTube Upload as before (same)
+# 📤 YouTube Upload parts (as before)
 def get_youtube_service():
     creds = None
     if os.path.exists("token.json"):
@@ -217,6 +235,6 @@ def run_automation(total_videos=1):
             print(f"❌ Video {i} failed")
     print("\n🎉 Automation completed!")
 
-
 if __name__ == "__main__":
     run_automation(total_videos=1)
+    
