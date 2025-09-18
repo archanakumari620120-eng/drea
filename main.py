@@ -162,7 +162,5 @@ def main():
             os.remove(music_path)
 
             print("✅ Video uploaded successfully.")
-            
-
-if __name__ == "__main__":
+            if __name__ == "__main__":
     main()
