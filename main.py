@@ -1,7 +1,6 @@
 import os
 import random
 from datetime import datetime
-from time import sleep
 from moviepy.editor import ImageClip, AudioFileClip
 from diffusers import StableDiffusionPipeline
 import torch
@@ -22,9 +21,9 @@ FONT_FILE = "arial.ttf"  # PIL font
 MAX_FONT_SIZE = 100
 MIN_FONT_SIZE = 40
 
-# Env variables for GitHub Actions secrets
-TOKEN_FILE = os.environ.get("TOKEN_JSON", "token.json")
-CLIENT_SECRET_FILE = os.environ.get("CLIENT_SECRET_JSON", "client_secret.json")
+# Env variables for secrets
+TOKEN_FILE = os.environ.get("TOKEN_FILE", "token.json")
+CLIENT_SECRET_FILE = os.environ.get("CLIENT_SECRET_FILE", "client_secret.json")
 YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
 # ------------------ Helpers ------------------
@@ -58,7 +57,7 @@ def overlay_text_on_image(image_path, text, output_path):
             break
         font_size -= 2
 
-    # Semi-transparent rectangle
+    # Semi-transparent rectangle for readability
     rectangle_height = total_height + 40
     rectangle_y = (img.height - rectangle_height)//2
     overlay = Image.new("RGBA", img.size, (0,0,0,0))
@@ -70,7 +69,6 @@ def overlay_text_on_image(image_path, text, output_path):
     img = Image.alpha_composite(img.convert("RGBA"), overlay)
     draw = ImageDraw.Draw(img)
 
-    # Draw text line by line
     y_text = rectangle_y + 20
     for line in lines:
         w, h = draw.textsize(line, font=font)
@@ -128,12 +126,11 @@ def youtube_upload(video_file, title, description="", tags=[]):
     response = request.execute()
     return response
 
-# ------------------ Main Loop ------------------
+# ------------------ Main ------------------
 def main():
     quotes = load_quotes()
-    while True:
+    for quote in quotes:  # Single run per workflow
         try:
-            quote = random.choice(quotes)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             image_path = os.path.join(IMAGES_DIR, f"{timestamp}.jpg")
             text_image_path = os.path.join(IMAGES_DIR, f"{timestamp}_text.jpg")
@@ -146,21 +143,26 @@ def main():
             # Overlay text
             overlay_text_on_image(image_path, quote, text_image_path)
 
-            # Get copyright-free music
+            # Download music
             music_path = download_copyright_free_music()
 
             # Create video
             create_video(text_image_path, music_path, video_path)
 
-            # Upload to YouTube
+            # Upload
             youtube_upload(video_path, title=quote, description="Motivational Short", tags=["motivation","shorts"])
 
-            # Cleanup temp files
+            # Cleanup
             os.remove(image_path)
             os.remove(text_image_path)
             os.remove(video_path)
             os.remove(music_path)
 
             print("✅ Video uploaded successfully.")
-            if __name__ == "__main__":
+
+        except Exception as e:
+            print("❌ Error:", e)
+
+if __name__ == "__main__":
     main()
+        
