@@ -23,8 +23,8 @@ MAX_FONT_SIZE = 100
 MIN_FONT_SIZE = 40
 
 # Env variables for GitHub Actions secrets
-TOKEN_FILE = os.environ.get("TOKEN_FILE", "token.json")
-CLIENT_SECRET_FILE = os.environ.get("CLIENT_SECRET_FILE", "client_secret.json")
+TOKEN_FILE = os.environ.get("TOKEN_JSON", "token.json")
+CLIENT_SECRET_FILE = os.environ.get("CLIENT_SECRET_JSON", "client_secret.json")
 YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
 # ------------------ Helpers ------------------
@@ -162,11 +162,7 @@ def main():
             os.remove(music_path)
 
             print("✅ Video uploaded successfully.")
-            sleep(6*3600)
-
-        except Exception as e:
-            print("❌ Error:", e)
-            sleep(60)
+            
 
 if __name__ == "__main__":
     main()
