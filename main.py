@@ -1,4 +1,4 @@
-    import os
+import os
 import random
 import yt_dlp
 from moviepy.editor import ImageClip, AudioFileClip, CompositeVideoClip
