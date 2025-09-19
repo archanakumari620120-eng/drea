@@ -1,148 +1,186 @@
 import os
 import random
-import yt_dlp
-import torch
-from datetime import datetime
-from moviepy.editor import ImageClip, AudioFileClip
-from diffusers import StableDiffusionPipeline
-from PIL import Image, ImageDraw, ImageFont
-from googleapiclient.discovery import build
+import traceback
+import json
+from time import sleep
+from pathlib import Path
+
+import requests
+from moviepy.editor import ImageClip, AudioFileClip, CompositeVideoClip
+
+# Gemini AI
+import google.generativeai as genai
+
+# YouTube API
 from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
-# 📂 Directories
-IMAGES_DIR = "images"
-MUSIC_DIR = "music"
+# ---------------- DIRECTORIES ----------------
 VIDEOS_DIR = "videos"
-QUOTES_FILE = "quotes.txt"
+MUSIC_DIR = "music"
+Path(VIDEOS_DIR).mkdir(exist_ok=True)
+Path(MUSIC_DIR).mkdir(exist_ok=True)
 
-os.makedirs(IMAGES_DIR, exist_ok=True)
-os.makedirs(MUSIC_DIR, exist_ok=True)
-os.makedirs(VIDEOS_DIR, exist_ok=True)
+# ---------------- SECRETS CHECK ----------------
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+TOKEN_JSON = os.getenv("TOKEN_JSON")
 
-# 🎯 Config
-video_duration = 15
-topic = "Motivational Quotes"
-playlist_url = "https://www.youtube.com/playlist?list=PLzCxunOM5WFLvFj8k1nKQw0h0lMftzG0q"
+if not HF_API_TOKEN or not GEMINI_API_KEY or not TOKEN_JSON:
+    raise ValueError("❌ Missing secrets! Check HF_API_TOKEN, GEMINI_API_KEY, TOKEN_JSON")
+else:
+    print("✅ All secrets loaded")
 
-# 🤖 AI pipeline (CPU safe)
-device = "cuda" if torch.cuda.is_available() else "cpu"
-pipe = StableDiffusionPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5",
-    torch_dtype=torch.float32
-).to(device)
+# ---------------- GEMINI CONFIG ----------------
+genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_MODEL = "gemini-1.5-flash"
 
-# 📝 Load quotes
-def load_quotes():
-    if os.path.exists(QUOTES_FILE):
-        with open(QUOTES_FILE, "r", encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip()]
-    return ["Stay motivated!", "Keep going!", "Never give up!"]
+# ---------------- FUNCTIONS ----------------
 
-# 🖼️ Generate AI/fallback image with text
-def generate_image(i, quote):
+def generate_concept_and_metadata():
+    """
+    Gemini AI se prompt, title, description, tags, hashtags generate karega.
+    Har run me alag content.
+    """
+    user_prompt = """
+    Generate a trending viral YouTube Shorts video metadata.
+    Include:
+    1. Concept/prompt for image/video (1080x1920 vertical)
+    2. Video title
+    3. Description
+    4. Tags (comma separated)
+    5. Hashtags (space separated)
+
+    Content categories: animal, human, boy, girl, sports, space, nature, motivation, quotes
+    Make every run unique and viral
+    Output in JSON:
+    {"prompt": "...", "title": "...", "description": "...", "tags": "...", "hashtags": "..."}
+    """
     try:
-        prompt = f"cinematic motivational wallpaper, {topic}, Indian style, 4k, ultra realistic"
-        result = pipe(prompt, height=720, width=1280, num_inference_steps=20)
-        image = result.images[0] if result and hasattr(result, "images") else None
-        if image is None:
-            raise ValueError("AI image gen failed")
+        response = genai.chat(messages=[{"content": user_prompt}])
+        text_output = response.last
+        data = json.loads(text_output)
+        print("✅ Gemini generated metadata")
+        return data
     except Exception as e:
-        print(f"⚠️ AI Image gen failed: {e}")
-        image = Image.new("RGB", (1280, 720), color=(0, 0, 0))
+        print(f"❌ Error generating metadata: {e}")
+        traceback.print_exc()
+        # fallback static concept
+        return {
+            "prompt": "Vertical 1080x1920 YouTube Short background of Animal Video, ultra-realistic cinematic, trending on YouTube Shorts",
+            "title": "Animal Video #Shorts",
+            "description": "AI Generated Viral Short",
+            "tags": "AI,Shorts,Animals",
+            "hashtags": "#AI #Shorts #Animals"
+        }
 
-    draw = ImageDraw.Draw(image)
+def generate_image(prompt):
+    """ Hugging Face text-to-image """
+    url = f"https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+    payload = {"inputs": prompt}
     try:
-        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 50)
-    except:
-        font = ImageFont.load_default()
-    text_w, text_h = draw.textsize(quote, font=font)
-    x, y = (image.width - text_w) // 2, (image.height - text_h) // 2
-    draw.text((x, y), quote, font=font, fill=(255, 255, 255))
+        print(f"🔹 Hugging Face API request...")
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code != 200:
+            raise Exception(f"HF API Error: {response.status_code}")
+        img_path = os.path.join(VIDEOS_DIR, "frame.png")
+        with open(img_path, "wb") as f:
+            f.write(response.content)
+        print(f"✅ Image saved: {img_path}")
+        return img_path
+    except Exception as e:
+        print(f"❌ HF image generation failed: {e}")
+        traceback.print_exc()
+        # fallback image
+        return None
 
-    path = os.path.join(IMAGES_DIR, f"image_{i}.png")
-    image.save(path)
-    return path
-
-# 🎵 Get or download music
-def get_music():
+def get_random_music():
+    """ Copyright-free YouTube music fetch placeholder """
     try:
-        files = [f for f in os.listdir(MUSIC_DIR) if f.endswith(".mp3")]
+        files = [f for f in os.listdir(MUSIC_DIR) if f.endswith((".mp3", ".wav"))]
         if not files:
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "extractaudio": True,
-                "audioformat": "mp3",
-                "outtmpl": os.path.join(MUSIC_DIR, "%(title)s.%(ext)s"),
-                "quiet": True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([playlist_url])
-            files = [f for f in os.listdir(MUSIC_DIR) if f.endswith(".mp3")]
-        return os.path.join(MUSIC_DIR, random.choice(files)) if files else None
+            print("⚠️ No music found, video will be silent.")
+            return None
+        chosen = os.path.join(MUSIC_DIR, random.choice(files))
+        print(f"🎵 Music chosen: {chosen}")
+        return chosen
     except Exception as e:
-        print(f"⚠️ Music failed: {e}")
+        print(f"❌ Music selection error: {e}")
         return None
 
-# 🎬 Make video
-def create_video(i, img, audio):
+def create_video(image_path, audio_path, output_path="final_video.mp4", duration=10):
+    """ MoviePy video creation """
     try:
-        path = os.path.join(VIDEOS_DIR, f"video_{i}.mp4")
-        clip = ImageClip(img, duration=video_duration)
-        if audio and os.path.exists(audio):
-            audio_clip = AudioFileClip(audio).subclip(0, video_duration)
-            clip = clip.set_audio(audio_clip)
-        else:
-            print("⚠️ No audio, silent video.")
-        clip.write_videofile(path, fps=24, codec="libx264", audio_codec="aac")
-        return path
+        clip = ImageClip(image_path).set_duration(duration)
+        if audio_path and os.path.exists(audio_path):
+            audio_clip = AudioFileClip(audio_path)
+            if audio_clip.duration < duration:
+                audio_clip = audio_clip.fx(vfx.loop, duration=duration)
+            clip = clip.set_audio(audio_clip.subclip(0, duration))
+        clip.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+        print(f"✅ Video ready: {output_path}")
+        return output_path
     except Exception as e:
-        print(f"❌ Video failed: {e}")
-        return None
+        print(f"❌ Video creation failed: {e}")
+        traceback.print_exc()
+        raise
 
-# ⬆️ Upload to YouTube
-def upload_video(video_path, title, description, tags):
+def upload_to_youtube(video_path, title, description, tags):
+    """ YouTube public upload """
     try:
-        creds = Credentials.from_authorized_user_file("token.json", ["https://www.googleapis.com/auth/youtube.upload"])
+        creds_dict = json.loads(TOKEN_JSON)
+        creds = Credentials.from_authorized_user_info(creds_dict, ["https://www.googleapis.com/auth/youtube.upload"])
         youtube = build("youtube", "v3", credentials=creds)
-
         request = youtube.videos().insert(
             part="snippet,status",
             body={
                 "snippet": {
                     "title": title,
                     "description": description,
-                    "tags": tags,
-                    "categoryId": "22"  # People & Blogs
+                    "tags": tags.split(","),
+                    "categoryId": "22"
                 },
-                "status": {"privacyStatus": "public"},
+                "status": {"privacyStatus": "public"}
             },
             media_body=video_path
         )
         response = request.execute()
-        print(f"✅ Uploaded: https://youtu.be/{response['id']}")
+        print(f"✅ Uploaded! Video ID: {response.get('id')}")
+        return response.get("id")
     except Exception as e:
-        print(f"❌ Upload failed: {e}")
+        print(f"❌ YouTube upload error: {e}")
+        traceback.print_exc()
+        raise
 
-# 🚀 Main
-def run_automation(total_videos=1):
-    quotes = load_quotes()
-    for i in range(total_videos):
-        quote = random.choice(quotes)
-        print(f"\n🎬 Making video {i} with: {quote}")
-        img = generate_image(i, quote)
-        audio = get_music()
-        video = create_video(i, img, audio)
-
-        if video:
-            title = f"{quote} | Motivational Shorts"
-            description = f"{quote}\n\nStay motivated daily with powerful life lessons."
-            tags = ["motivation", "life", "success", "shorts", "inspiration"]
-            upload_video(video, title, description, tags)
-        else:
-            print(f"❌ Video {i} failed")
-
-    print("\n🎉 Automation completed!")
-
+# ---------------- MAIN PIPELINE ----------------
 if __name__ == "__main__":
-    run_automation(total_videos=1)
+    try:
+        # 1️⃣ Gemini generates concept, title, description, tags, hashtags
+        metadata = generate_concept_and_metadata()
+        prompt = metadata.get("prompt")
+        title = metadata.get("title")
+        description = metadata.get("description")
+        tags = metadata.get("tags")
+
+        # 2️⃣ Generate image from HF
+        image_path = generate_image(prompt)
+        if not image_path:
+            print("⚠️ Falling back to default image")
+            image_path = "fallback.png"  # Make sure you have a fallback image
+
+        # 3️⃣ Pick music
+        music_path = get_random_music()
+
+        # 4️⃣ Create video
+        video_path = create_video(image_path, music_path)
+
+        # 5️⃣ Upload to YouTube
+        upload_to_youtube(video_path, title=title, description=description, tags=tags)
+
+        print("🎉 Pipeline complete!")
+
+    except Exception as e:
+        print(f"❌ Pipeline failed: {e}")
+        traceback.print_exc()
         
