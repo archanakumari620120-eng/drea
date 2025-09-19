@@ -2,20 +2,20 @@ name: AI Shorts Automation
 
 on:
   schedule:
-    - cron: "0 */5 * * *"   # ⏰ Har 5 ghante chalega
-  workflow_dispatch:         # 🔘 Manual run ka option
+    - cron: "0 */5 * * *"   # Runs every 5 hours
+  workflow_dispatch:         # Allows manual trigger
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo (full SHA)
-      - name: Checkout repo
+      # 1️⃣ Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@2b2e8a0d6c4e4e0e5f1c2b8b7d64f1234567890a
 
-      # 2️⃣ Python setup (full SHA)
-      - name: Setup Python
+      # 2️⃣ Set up Python 3.11
+      - name: Set up Python 3.11
         uses: actions/setup-python@1a2b3c4d5e6f7g8h9i0jklmnopqrstuv
         with:
           python-version: "3.11"
@@ -26,15 +26,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4️⃣ Setup secrets
-      - name: Setup secrets
+      # 4️⃣ Set up secrets
+      - name: Set up secrets
         run: |
           echo "${{ secrets.TOKEN_JSON }}" > token.json
         env:
           HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      # 5️⃣ Run main.py
+      # 5️⃣ Run the pipeline
       - name: Run pipeline
         run: python main.py
         env:
