@@ -1,8 +1,8 @@
-name: AI Shorts Automation
+name: YouTube Shorts Automation
 
 on:
-  schedule:
-    - cron: "0 */5 * * *"
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -10,29 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@<3df4ab11eba7bda6032a0b82a6bb43b11571feac>
+      # ✅ Checkout with pinned SHA
+      - name: Checkout repository
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.1.7
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@<82c7e631bb3cdc910f68e0081d67478d79c6982d>
+      # ✅ Setup Python with pinned SHA
+      - name: Set up Python
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v4.7.1
         with:
           python-version: "3.11"
 
+      # ✅ Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Save token.json
-        run: echo "${{ secrets.TOKEN_JSON }}" > token.json
-        env:
-          HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-      - name: Run pipeline
-        run: python main.py
+      # ✅ Run main.py
+      - name: Run script
         env:
           HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TOKEN_JSON: ${{ secrets.TOKEN_JSON }}
-          
+        run: python main.py
+        
