@@ -13,7 +13,7 @@ from moviepy.editor import ImageClip, AudioFileClip, vfx
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
-# NEW: Use the new 'google-genai' library
+# Use the new 'google-genai' library
 import google.generativeai as genai
 
 # ---------------- CONFIG & DIRECTORIES ----------------
@@ -38,7 +38,7 @@ def generate_concept_and_metadata():
         print("🔹 Generating metadata with Gemini...")
         genai.configure(api_key=GEMINI_API_KEY)
         
-        # CORRECT: Use GenerativeModel instead of chat()
+        # CORRECT: Use GenerativeModel instead of the old chat() method
         model = genai.GenerativeModel('gemini-1.5-flash')
 
         categories = ["Animal", "Human", "Boy", "Girl", "Sport", "Space", "Nature", "Motivation", "Quotes"]
@@ -60,6 +60,7 @@ def generate_concept_and_metadata():
         # CORRECT: Use model.generate_content()
         response = model.generate_content(user_prompt)
         
+        # Robustly find the JSON block in the response text
         cleaned_text = re.search(r'\{.*\}', response.text, re.DOTALL)
         if not cleaned_text:
             raise ValueError(f"❌ Gemini did not return valid JSON. Response: {response.text}")
@@ -167,4 +168,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
         traceback.print_exc()
-
+        
