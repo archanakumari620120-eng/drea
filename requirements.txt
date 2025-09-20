@@ -10,5 +10,6 @@ google-auth-httplib2
 requests>=2.32.3
 yt_dlp
 google-generativeai==0.1.0
+google-genai
 moviepy==1.0.3
 google-api-python-client==2.98.0
