@@ -1,123 +1,170 @@
 import os
-import json
 import random
 import traceback
-from time import sleep
-from moviepy.editor import VideoFileClip, AudioFileClip, vfx
 import requests
-import google.generativeai as genai
+import json
+import re
+from time import sleep
+
+# Video processing
+from moviepy.editor import ImageClip, AudioFileClip, vfx
+
+# YouTube API
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
-# ---------------- DIRECTORIES ----------------
-VIDEOS_DIR = "videos"
-os.makedirs(VIDEOS_DIR, exist_ok=True)
+# NEW: Use the new 'google-genai' library
+import google.generativeai as genai
 
-# ---------------- LOAD SECRETS ----------------
+# ---------------- CONFIG & DIRECTORIES ----------------
+VIDEOS_DIR = "videos"
+MUSIC_DIR = "music"
+os.makedirs(VIDEOS_DIR, exist_ok=True)
+os.makedirs(MUSIC_DIR, exist_ok=True)
+
+# ---------------- SECRETS ----------------
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TOKEN_JSON = os.getenv("TOKEN_JSON")
 
-if not HF_API_TOKEN or not GEMINI_API_KEY or not TOKEN_JSON:
-    raise ValueError("❌ Missing secrets! Check HF_API_TOKEN, GEMINI_API_KEY, TOKEN_JSON")
+if not all([HF_API_TOKEN, GEMINI_API_KEY, TOKEN_JSON]):
+    raise ValueError("❌ Missing one or more secrets! Check HF_API_TOKEN, GEMINI_API_KEY, TOKEN_JSON")
+print("✅ All secrets loaded successfully.")
 
-# Save TOKEN_JSON to file
-with open("token.json", "w") as f:
-    f.write(TOKEN_JSON)
-
-print("✅ All secrets loaded")
-
-# ---------------- GEMINI: Generate Concept & Metadata ----------------
+# ---------------- GEMINI: Concept, Title, Description, Tags ----------------
 def generate_concept_and_metadata():
+    """Generates video metadata using the new Gemini API method."""
     try:
+        print("🔹 Generating metadata with Gemini...")
         genai.configure(api_key=GEMINI_API_KEY)
-        prompt = (
-            "Generate a viral, trending, YouTube Shorts-ready video idea with:\n"
-            "- Title (catchy, unique)\n"
-            "- Description (viral, engaging)\n"
-            "- Tags and hashtags (trending, relevant)\n"
-            "- Video prompt (for image/video generation, vertical 1080x1920)\n"
-            "Categories: animal, human, sports, space, nature, motivation, facts, quotes.\n"
-            "Output JSON format with keys: title, description, tags, hashtags, prompt."
-        )
-        response = genai.chat(messages=[{"content": prompt}])
-        text_output = response.last
-        data = json.loads(text_output)
-        return data
-    except Exception as e:
-        print(f"❌ Error generating metadata: {e}")
-        traceback.print_exc()
-        return {
-            "title": "Default AI Video #shorts",
-            "description": "Auto-generated video",
-            "tags": ["AI", "Shorts"],
-            "hashtags": ["#AI", "#Shorts"],
-            "prompt": "Vertical 1080x1920 AI background video"
-        }
+        
+        # CORRECT: Use GenerativeModel instead of chat()
+        model = genai.GenerativeModel('gemini-1.5-flash')
 
-# ---------------- HUGGING FACE: Generate Video ----------------
-def generate_video_hf(prompt):
-    try:
-        headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-        payload = {"inputs": prompt, "options":{"wait_for_model":True}}
-        api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-        print(f"📝 Prompt for video: {prompt}")
-        response = requests.post(api_url, headers=headers, json=payload)
-        if response.status_code != 200:
-            print(f"⚠️ Hugging Face API failed, status: {response.status_code}")
-            return None
-        video_path = os.path.join(VIDEOS_DIR, "final_video.mp4")
-        with open(video_path, "wb") as f:
-            f.write(response.content)
-        print(f"✅ Video saved: {video_path}")
-        return video_path
+        categories = ["Animal", "Human", "Boy", "Girl", "Sport", "Space", "Nature", "Motivation", "Quotes"]
+        category = random.choice(categories)
+
+        user_prompt = f"""
+        You are a YouTube Shorts content expert. Generate viral content ideas.
+        Your output MUST be a single, clean JSON object, without any markdown formatting.
+        Category: {category}
+        JSON format:
+        {{
+            "concept": "A very short, creative, and visually compelling concept for an AI image.",
+            "title": "A catchy, viral YouTube Shorts title (under 70 characters).",
+            "description": "A short description with 3-4 relevant hashtags at the end.",
+            "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
+        }}
+        """
+        
+        # CORRECT: Use model.generate_content()
+        response = model.generate_content(user_prompt)
+        
+        cleaned_text = re.search(r'\{.*\}', response.text, re.DOTALL)
+        if not cleaned_text:
+            raise ValueError(f"❌ Gemini did not return valid JSON. Response: {response.text}")
+            
+        metadata = json.loads(cleaned_text.group(0))
+        print("✅ Gemini metadata generated successfully.")
+        return metadata
+
     except Exception as e:
-        print(f"❌ Error generating video: {e}")
+        print(f"❌ Gemini metadata error: {e}")
         traceback.print_exc()
-        return None
+        raise
+
+# ---------------- HUGGING FACE IMAGE GENERATION ----------------
+def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
+    api_url = f"https://api-inference.huggingface.co/models/{model_id}"
+    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+    payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
+
+    print(f"🖼️ Requesting image from Hugging Face for prompt: {prompt}")
+    response = requests.post(api_url, headers=headers, json=payload)
+
+    if response.status_code == 503:
+        print("⏳ Model is loading, waiting for 30 seconds...")
+        sleep(30)
+        response = requests.post(api_url, headers=headers, json=payload)
+
+    if response.status_code != 200:
+        raise Exception(f"Hugging Face API error {response.status_code}: {response.text}")
+
+    img_path = os.path.join(VIDEOS_DIR, "frame.png")
+    with open(img_path, "wb") as f:
+        f.write(response.content)
+    print(f"✅ Image saved successfully: {img_path}")
+    return img_path
+
+# ---------------- MUSIC SELECTION ----------------
+def get_random_music():
+    try:
+        files = [f for f in os.listdir(MUSIC_DIR) if f.endswith((".mp3", ".wav"))]
+        if not files:
+            print("⚠️ No music found. The video will be silent.")
+            return None
+        chosen = os.path.join(MUSIC_DIR, random.choice(files))
+        print(f"🎵 Music selected: {chosen}")
+        return chosen
+    except Exception as e:
+        print(f"❌ Error selecting music: {e}")
+        raise
+
+# ---------------- VIDEO CREATION ----------------
+def create_video(image_path, audio_path, output_path="final_video.mp4"):
+    try:
+        print("🎬 Creating video...")
+        clip_duration = 10
+        clip = ImageClip(image_path).set_duration(clip_duration)
+
+        if audio_path and os.path.exists(audio_path):
+            audio_clip = AudioFileClip(audio_path)
+            if audio_clip.duration < clip_duration:
+                audio_clip = audio_clip.fx(vfx.loop, duration=clip_duration)
+            clip = clip.set_audio(audio_clip.subclip(0, clip_duration))
+
+        clip.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+        print(f"✅ Video created successfully: {output_path}")
+        return output_path
+    except Exception as e:
+        print(f"❌ Error creating video: {e}")
+        traceback.print_exc()
+        raise
 
 # ---------------- YOUTUBE UPLOAD ----------------
-def upload_to_youtube(video_path, title, description, tags):
+def upload_to_youtube(video_path, title, description, tags, privacy="public"):
     try:
+        print("📤 Uploading to YouTube...")
+        with open("token.json", "w") as f:
+            f.write(TOKEN_JSON)
+
         creds = Credentials.from_authorized_user_file("token.json", ["https://www.googleapis.com/auth/youtube.upload"])
         youtube = build("youtube", "v3", credentials=creds)
-        request = youtube.videos().insert(
-            part="snippet,status",
-            body={
-                "snippet": {
-                    "title": title,
-                    "description": description,
-                    "tags": tags,
-                    "categoryId": "22"
-                },
-                "status": {"privacyStatus": "public"}
-            },
-            media_body=video_path
-        )
+
+        request_body = {
+            "snippet": { "title": title, "description": description, "tags": tags, "categoryId": "22" },
+            "status": { "privacyStatus": privacy, "selfDeclaredMadeForKids": False }
+        }
+
+        request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=video_path)
         response = request.execute()
-        print(f"✅ Uploaded! Video ID: {response.get('id')}")
+        print(f"✅ Video uploaded successfully! Video ID: {response.get('id')}")
         return response.get("id")
     except Exception as e:
-        print(f"❌ YouTube upload error: {e}")
+        print(f"❌ Error uploading to YouTube: {e}")
         traceback.print_exc()
-        return None
+        raise
 
 # ---------------- MAIN PIPELINE ----------------
 if __name__ == "__main__":
     try:
-        # 1️⃣ Generate metadata
         metadata = generate_concept_and_metadata()
-
-        # 2️⃣ Generate video
-        video_path = generate_video_hf(metadata["prompt"])
-        if not video_path:
-            print("⚠️ Video generation failed. Exiting...")
-            exit(1)
-
-        # 3️⃣ Upload to YouTube
+        img_path = generate_image_huggingface(metadata["concept"])
+        music_path = get_random_music()
+        video_path = create_video(img_path, music_path)
         upload_to_youtube(video_path, metadata["title"], metadata["description"], metadata["tags"])
-
-        print("🎉 Pipeline complete!")
+        print("\n🎉 Pipeline completed successfully! 🎉")
     except Exception as e:
-        print(f"❌ Pipeline failed: {e}")
+        print(f"\n❌ Pipeline failed: {e}")
         traceback.print_exc()
+
