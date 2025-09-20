@@ -75,7 +75,8 @@ def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl
     """Generates an image using Hugging Face Inference API."""
     
     # FIX: Corrected the URL by removing markdown formatting
-    api_url = f"[https://api-inference.huggingface.co/models/](https://api-inference.huggingface.co/models/){model_id}"
+    api_url = f"https://api-inference.huggingface.co/models/{model_id}"
+    
     
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
