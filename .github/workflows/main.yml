@@ -21,12 +21,10 @@ jobs:
           python-version: "3.11"
 
       # ✅ Install dependencies
-      - name: Install Dependencies
-  run: |
-    python -m pip install --upgrade pip
-    pip install --upgrade google-genai moviepy google-api-python-client google-auth-oauthlib
-    
-
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
       # ✅ Run main.py
       - name: Run script
         env:
@@ -34,4 +32,3 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TOKEN_JSON: ${{ secrets.TOKEN_JSON }}
         run: python main.py
-        
