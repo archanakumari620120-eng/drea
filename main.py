@@ -74,10 +74,7 @@ def generate_concept_and_metadata():
 def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
     """Generates an image using Hugging Face Inference API."""
     
-    # FIX: Corrected the URL by removing markdown formatting
-    api_url = f"https://api-inference.huggingface.co/models/{model_id}"
-    
-    
+    api_url = f"[https://api-inference.huggingface.co/models/](https://api-inference.huggingface.co/models/){model_id}"
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
 
@@ -135,27 +132,41 @@ def create_video(image_path, audio_path, output_path="final_video.mp4"):
         traceback.print_exc()
         raise
 
-# ---------------- YOUTUBE UPLOAD ----------------
+# ---------------- YOUTUBE UPLOAD (Corrected) ----------------
 def upload_to_youtube(video_path, title, description, tags, privacy="public"):
     """Uploads the video to YouTube."""
     try:
         print("📤 Uploading to YouTube...")
-        with open("token.json", "w") as f:
-            f.write(TOKEN_JSON)
+        
+        token_info = json.loads(TOKEN_JSON)
+        creds = Credentials.from_authorized_user_info(token_info, scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"])
 
-        # FIX: Corrected the scope URL by removing markdown formatting
-        creds = Credentials.from_authorized_user_file("token.json", ["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"])
         youtube = build("youtube", "v3", credentials=creds)
 
         request_body = {
-            "snippet": { "title": title, "description": description, "tags": tags, "categoryId": "22" },
-            "status": { "privacyStatus": privacy, "selfDeclaredMadeForKids": False }
+            "snippet": {
+                "title": title,
+                "description": description,
+                "tags": tags,
+                "categoryId": "22"
+            },
+            "status": {
+                "privacyStatus": privacy,
+                "selfDeclaredMadeForKids": False
+            }
         }
 
-        request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=video_path)
+        print("🚀 Sending video upload request...")
+        request = youtube.videos().insert(
+            part="snippet,status",
+            body=request_body,
+            media_body=video_path
+        )
         response = request.execute()
+        
         print(f"✅ Video uploaded successfully! Video ID: {response.get('id')}")
         return response.get("id")
+        
     except Exception as e:
         print(f"❌ YouTube upload error: {e}")
         traceback.print_exc()
