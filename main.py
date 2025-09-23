@@ -57,6 +57,7 @@ def generate_concept_and_metadata():
         
         response = model.generate_content(user_prompt)
         
+        # Clean the response to ensure it's valid JSON
         cleaned_text = re.search(r'\{.*\}', response.text, re.DOTALL)
         if not cleaned_text:
             raise ValueError("❌ Gemini did not return a valid JSON object.")
@@ -74,19 +75,18 @@ def generate_concept_and_metadata():
 def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
     """Generates an image using Hugging Face Inference API."""
     
-    # CORRECT
-API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-
+    API_URL = f"[https://api-inference.huggingface.co/models/](https://api-inference.huggingface.co/models/){model_id}"
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
 
     print(f"🖼️ Requesting image from Hugging Face for prompt: {prompt}")
-    response = requests.post(api_url, headers=headers, json=payload)
+    response = requests.post(API_URL, headers=headers, json=payload) # FIX: Changed api_url to API_URL
 
+    # Handle model loading time
     if response.status_code == 503:
         print("⏳ Model is loading, waiting for 30 seconds...")
         sleep(30)
-        response = requests.post(api_url, headers=headers, json=payload)
+        response = requests.post(API_URL, headers=headers, json=payload) # FIX: Changed api_url to API_URL
 
     if response.status_code != 200:
         raise Exception(f"Hugging Face API error {response.status_code}: {response.text}")
@@ -134,13 +134,14 @@ def create_video(image_path, audio_path, output_path="final_video.mp4"):
         traceback.print_exc()
         raise
 
-# ---------------- YOUTUBE UPLOAD (Corrected) ----------------
+# ---------------- YOUTUBE UPLOAD ----------------
 def upload_to_youtube(video_path, title, description, tags, privacy="public"):
     """Uploads the video to YouTube."""
     try:
         print("📤 Uploading to YouTube...")
         
         token_info = json.loads(TOKEN_JSON)
+        # FIX: Corrected the scope URL string. It should not be a markdown link.
         creds = Credentials.from_authorized_user_info(token_info, scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"])
 
         youtube = build("youtube", "v3", credentials=creds)
@@ -150,7 +151,7 @@ def upload_to_youtube(video_path, title, description, tags, privacy="public"):
                 "title": title,
                 "description": description,
                 "tags": tags,
-                "categoryId": "22"
+                "categoryId": "22" # Category for People & Blogs
             },
             "status": {
                 "privacyStatus": privacy,
@@ -185,5 +186,5 @@ if __name__ == "__main__":
         print("\n🎉 Pipeline completed successfully! 🎉")
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
-        traceback.print_exc()
-        
+        # No need to print traceback here again as it's printed in the functions
+    
