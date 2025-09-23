@@ -74,7 +74,9 @@ def generate_concept_and_metadata():
 def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
     """Generates an image using Hugging Face Inference API."""
     
-    api_url = f"[https://api-inference.huggingface.co/models/](https://api-inference.huggingface.co/models/){model_id}"
+    # CORRECT
+API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
 
