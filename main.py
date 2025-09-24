@@ -143,7 +143,8 @@ def upload_to_youtube(video_path, title, description, tags, privacy="public"):
         # FIX: Load the credentials directly from the TOKEN_JSON environment variable
         # instead of trying to find a file.
         token_info = json.loads(TOKEN_JSON)
-        creds = Credentials.from_authorized_user_info(token_info, scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"])
+        creds = Credentials.from_authorized_user_info(token_info, scopes=["https://www.googleapis.com/auth/youtube.upload"])
+        
 
         youtube = build("youtube", "v3", credentials=creds)
 
