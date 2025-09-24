@@ -1,4 +1,4 @@
-import os
+                        "import os
 import random
 import traceback
 import requests
@@ -75,18 +75,19 @@ def generate_concept_and_metadata():
 def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
     """Generates an image using Hugging Face Inference API."""
     
+    # FIX: Removed Markdown link formatting from the URL string.
     API_URL = f"[https://api-inference.huggingface.co/models/](https://api-inference.huggingface.co/models/){model_id}"
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
 
     print(f"🖼️ Requesting image from Hugging Face for prompt: {prompt}")
-    response = requests.post(API_URL, headers=headers, json=payload) # FIX: Changed api_url to API_URL
+    response = requests.post(API_URL, headers=headers, json=payload)
 
     # Handle model loading time
     if response.status_code == 503:
         print("⏳ Model is loading, waiting for 30 seconds...")
         sleep(30)
-        response = requests.post(API_URL, headers=headers, json=payload) # FIX: Changed api_url to API_URL
+        response = requests.post(API_URL, headers=headers, json=payload)
 
     if response.status_code != 200:
         raise Exception(f"Hugging Face API error {response.status_code}: {response.text}")
@@ -186,5 +187,4 @@ if __name__ == "__main__":
         print("\n🎉 Pipeline completed successfully! 🎉")
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
-        # No need to print traceback here again as it's printed in the functions
-    
+        
