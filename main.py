@@ -143,7 +143,7 @@ def upload_to_youtube(video_path, title, description, tags, privacy="public"):
         
         token_info = json.loads(TOKEN_JSON)
         # FIX: Corrected the scope URL string. It should not be a markdown link.
-        creds = Credentials.from_authorized_user_info(token_info, scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"])
+        creds = Credentials.from_authorized_user_file("token.json", ["https://www.googleapis.com/auth/youtube.upload"])
 
         youtube = build("youtube", "v3", credentials=creds)
 
