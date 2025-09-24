@@ -75,8 +75,7 @@ def generate_concept_and_metadata():
 def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
     """Generates an image using Hugging Face Inference API."""
     
-    # FIX: Removed Markdown link formatting from the URL string.
-    API_URL =f"https://api-inference.huggingface.co/models/{model_id}"
+    API_URL =f"[https://api-inference.huggingface.co/models/](https://api-inference.huggingface.co/models/){model_id}"
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
 
@@ -141,9 +140,10 @@ def upload_to_youtube(video_path, title, description, tags, privacy="public"):
     try:
         print("📤 Uploading to YouTube...")
         
+        # FIX: Load the credentials directly from the TOKEN_JSON environment variable
+        # instead of trying to find a file.
         token_info = json.loads(TOKEN_JSON)
-        # FIX: Corrected the scope URL string. It should not be a markdown link.
-        creds = Credentials.from_authorized_user_file("token.json", ["https://www.googleapis.com/auth/youtube.upload"])
+        creds = Credentials.from_authorized_user_info(token_info, scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"])
 
         youtube = build("youtube", "v3", credentials=creds)
 
