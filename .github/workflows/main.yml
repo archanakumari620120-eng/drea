@@ -1,9 +1,10 @@
 name: YouTube Shorts Automation
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+  schedule:
+    - cron: "0 */5 * * *"   # ⏰ Har 5 ghante chalega
+  workflow_dispatch:         # 🔘 Manual run ka option bhi hoga
+  
 
 jobs:
   build:
