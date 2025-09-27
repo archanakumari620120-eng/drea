@@ -1,13 +1,13 @@
-import os
+Import os
 import random
 import traceback
 import requests
 import json
+import re
 from time import sleep
 
 # Video processing
-# IMPROVEMENT: Import CompositeVideoClip for zoom effect
-from moviepy.editor import ImageClip, AudioFileClip, vfx, CompositeVideoClip
+from moviepy.editor import ImageClip, AudioFileClip, vfx
 
 # YouTube API
 from googleapiclient.discovery import build
@@ -15,8 +15,6 @@ from google.oauth2.credentials import Credentials
 
 # Gemini API
 import google.generativeai as genai
-# IMPROVEMENT: Use GenerationConfig for reliable JSON output
-from google.generativeai.types import GenerationConfig
 
 # ---------------- CONFIG & DIRECTORIES ----------------
 VIDEOS_DIR = "videos"
@@ -35,41 +33,36 @@ print("✅ All secrets loaded successfully.")
 
 # ---------------- GEMINI: Concept, Title, Description, Tags ----------------
 def generate_concept_and_metadata():
-    """Generates video metadata using Gemini's JSON mode for reliability."""
+    """Generates video metadata using the updated Gemini API."""
     try:
         print("🔹 Generating metadata with Gemini...")
         genai.configure(api_key=GEMINI_API_KEY)
-
-        # IMPROVEMENT: Use GenerationConfig to enforce JSON output. This is more reliable than regex.
-        generation_config = GenerationConfig(response_mime_type="application/json")
-        
-        # FIX: Use the correct, stable model name to prevent the 404 error.
-        model = genai.GenerativeModel(
-            'gemini-1.5-flash-latest',
-            generation_config=generation_config
-        )
+        model = genai.GenerativeModel('gemini-1.5-flash')
 
         categories = ["Animal", "Human", "Boy", "Girl", "Sport", "Space", "Nature", "Motivation", "Quotes"]
         category = random.choice(categories)
 
         user_prompt = f"""
         You are a YouTube Shorts content expert. Generate viral content ideas.
-        Your output MUST be a single, clean JSON object.
+        Your output MUST be a single, clean JSON object, without any markdown formatting like ```json.
         Category: {category}
         JSON format:
         {{
             "concept": "A very short, creative, and visually compelling concept for an AI image.",
             "title": "A catchy, viral YouTube Shorts title (under 70 characters).",
             "description": "A short description with 3-4 relevant hashtags at the end.",
-            "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-            "category": "{category}"
+            "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
         }}
         """
         
         response = model.generate_content(user_prompt)
         
-        # FIX: Directly parse the JSON response text, no need for regex cleaning.
-        metadata = json.loads(response.text)
+        # Clean the response to ensure it's valid JSON
+        cleaned_text = re.search(r'\{.*\}', response.text, re.DOTALL)
+        if not cleaned_text:
+            raise ValueError("❌ Gemini did not return a valid JSON object.")
+            
+        metadata = json.loads(cleaned_text.group(0))
         print("✅ Gemini metadata generated successfully.")
         return metadata
 
@@ -80,27 +73,20 @@ def generate_concept_and_metadata():
 
 # ---------------- HUGGING FACE IMAGE GENERATION ----------------
 def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
-    """Generates an image with a guaranteed 1080x1920 aspect ratio."""
-    API_URL = f"https://api-inference.huggingface.co/models/{model_id}"
+    """Generates an image using Hugging Face Inference API."""
+    
+    API_URL = f"[https://api-inference.huggingface.co/models/](https://api-inference.huggingface.co/models/){model_id}"
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-
-    # FIX: Specify width and height in parameters to guarantee the correct aspect ratio for Shorts.
-    payload = {
-        "inputs": f"{prompt}, cinematic, high detail, trending on artstation, vibrant colors",
-        "parameters": {
-            "width": 1080,
-            "height": 1920,
-            "negative_prompt": "blurry, deformed, ugly, watermark, text"
-        }
-    }
+    payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
 
     print(f"🖼️ Requesting image from Hugging Face for prompt: {prompt}")
-    response = requests.post(API_URL, headers=headers, json=payload)
+    response = requests.post(API_URL, headers=headers, json=payload) # FIX: Changed api_url to API_URL
 
+    # Handle model loading time
     if response.status_code == 503:
         print("⏳ Model is loading, waiting for 30 seconds...")
         sleep(30)
-        response = requests.post(API_URL, headers=headers, json=payload)
+        response = requests.post(API_URL, headers=headers, json=payload) # FIX: Changed api_url to API_URL
 
     if response.status_code != 200:
         raise Exception(f"Hugging Face API error {response.status_code}: {response.text}")
@@ -115,9 +101,9 @@ def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl
 def get_random_music():
     """Selects a random music file from the music directory."""
     try:
-        files = [f for f in os.listdir(MUSIC_DIR) if f.endswith((".mp3", ".wav", ".m4a"))]
+        files = [f for f in os.listdir(MUSIC_DIR) if f.endswith((".mp3", ".wav"))]
         if not files:
-            print("⚠️ No music found. The video will be silent.")
+            print("⚠️ No music found in the music folder. The video will be silent.")
             return None
         chosen = os.path.join(MUSIC_DIR, random.choice(files))
         print(f"🎵 Music selected: {chosen}")
@@ -128,26 +114,19 @@ def get_random_music():
 
 # ---------------- VIDEO CREATION ----------------
 def create_video(image_path, audio_path, output_path="final_video.mp4"):
-    """Creates a dynamic video with a slow zoom effect."""
+    """Creates a video from an image and an audio file."""
     try:
-        print("🎬 Creating video with zoom effect...")
+        print("🎬 Creating video...")
         clip_duration = 10
-        
-        # IMPROVEMENT: Add a slow zoom-in effect to make the static image dynamic.
-        clip = (ImageClip(image_path)
-                .set_duration(clip_duration)
-                .resize(lambda t: 1 + 0.02 * t)  # Zoom in by 2% per second
-                .set_position(('center', 'center')))
-        
-        final_clip = CompositeVideoClip([clip], size=(1080, 1920))
+        clip = ImageClip(image_path).set_duration(clip_duration)
 
         if audio_path and os.path.exists(audio_path):
             audio_clip = AudioFileClip(audio_path)
             if audio_clip.duration < clip_duration:
                 audio_clip = audio_clip.fx(vfx.loop, duration=clip_duration)
-            final_clip = final_clip.set_audio(audio_clip.subclip(0, clip_duration))
+            clip = clip.set_audio(audio_clip.subclip(0, clip_duration))
 
-        final_clip.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+        clip.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
         print(f"✅ Video created successfully: {output_path}")
         return output_path
     except Exception as e:
@@ -156,36 +135,23 @@ def create_video(image_path, audio_path, output_path="final_video.mp4"):
         raise
 
 # ---------------- YOUTUBE UPLOAD ----------------
-def upload_to_youtube(video_path, title, description, tags, category_name, privacy="public"):
-    """Uploads the video to YouTube with a dynamic category."""
+def upload_to_youtube(video_path, title, description, tags, privacy="public"):
+    """Uploads the video to YouTube."""
     try:
         print("📤 Uploading to YouTube...")
         
         token_info = json.loads(TOKEN_JSON)
-        creds = Credentials.from_authorized_user_info(token_info, scopes=["https://www.googleapis.com/auth/youtube.upload"])
-        
-        youtube = build("youtube", "v3", credentials=creds)
+        # FIX: Corrected the scope URL string. It should not be a markdown link.
+        creds = Credentials.from_authorized_user_info(token_info, scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"])
 
-        # FIX: Map the generated category to a relevant YouTube Category ID.
-        category_map = {
-            "Animal": "15",  # Pets & Animals
-            "Sport": "17",   # Sports
-            "Space": "28",   # Science & Technology
-            "Nature": "15",  # Pets & Animals
-            "Motivation": "22", # People & Blogs
-            "Quotes": "22",  # People & Blogs
-            "Human": "22",   # People & Blogs
-            "Boy": "22",     # People & Blogs
-            "Girl": "22"     # People & Blogs
-        }
-        category_id = category_map.get(category_name, "22") # Default to People & Blogs
+        youtube = build("youtube", "v3", credentials=creds)
 
         request_body = {
             "snippet": {
                 "title": title,
                 "description": description,
                 "tags": tags,
-                "categoryId": category_id
+                "categoryId": "22" # Category for People & Blogs
             },
             "status": {
                 "privacyStatus": privacy,
@@ -193,7 +159,7 @@ def upload_to_youtube(video_path, title, description, tags, category_name, priva
             }
         }
 
-        print(f"🚀 Sending video upload request with category '{category_name}' ({category_id})...")
+        print("🚀 Sending video upload request...")
         request = youtube.videos().insert(
             part="snippet,status",
             body=request_body,
@@ -216,15 +182,9 @@ if __name__ == "__main__":
         img_path = generate_image_huggingface(metadata["concept"])
         music_path = get_random_music()
         video_path = create_video(img_path, music_path)
-        # FIX: Pass the category from metadata to the upload function
-        upload_to_youtube(
-            video_path, 
-            metadata["title"], 
-            metadata["description"], 
-            metadata["tags"],
-            metadata["category"]
-        )
+        upload_to_youtube(video_path, metadata["title"], metadata["description"], metadata["tags"])
         print("\n🎉 Pipeline completed successfully! 🎉")
     except Exception as e:
-        print(f"\n❌ Pipeline failed.")
-        
+        print(f"\n❌ Pipeline failed: {e}")
+        # No need to print traceback here again as it's printed in the functions
+    Fix the error in this code whose coming in image
