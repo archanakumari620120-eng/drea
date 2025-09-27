@@ -1,27 +1,28 @@
-name: YouTube Shorts Automation
+Name: YouTube Shorts Automation
 
 on:
   schedule:
-    - cron: "0 */5 * * *"   # ⏰ Har 5 ghante chalega
-  workflow_dispatch:         # 🔘 Manual run ka option bhi hoga
+    - cron: "0 */5 * * *"   # ⏰ Runs every 5 hours
+  workflow_dispatch:         # 🔘 Allows manual runs
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Checkout with pinned SHA
+      # ✅ Checkout repository
       - name: Checkout repository
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.1.7
+        uses: actions/checkout@v4
 
-      # ✅ Setup Python with pinned SHA
+      # ✅ Setup Python
       - name: Set up Python
-        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v4.7.1
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
       # ✅ Install dependencies
       - name: Install dependencies
-  run: pip install --no-cache-dir --upgrade -r requirements.txt
+        # FIX: Corrected the indentation of the 'run' command
+        run: pip install --no-cache-dir --upgrade -r requirements.txt
   
       # ✅ Run main.py
       - name: Run script
@@ -30,3 +31,4 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TOKEN_JSON: ${{ secrets.TOKEN_JSON }}
         run: python main.py
+        
