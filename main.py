@@ -187,4 +187,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
         # No need to print traceback here again as it's printed in the functions
-    Fix the error in this code whose coming in image
