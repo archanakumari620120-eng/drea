@@ -9,21 +9,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # FIX: Changed back to full commit SHA to match security policy
       - name: Checkout repository
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # Pinned to a specific version
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
 
-      # FIX: Changed back to full commit SHA to match security policy
       - name: Set up Python
-        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # Pinned to a specific version
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d
         with:
           python-version: "3.11"
 
-      # ✅ Install dependencies
       - name: Install dependencies
         run: pip install --no-cache-dir --upgrade -r requirements.txt
-  
-      # ✅ Run main.py
+
+      - name: Check installed packages      # <-- NEW DEBUG STEP
+        run: pip freeze
+
       - name: Run script
         env:
           HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
