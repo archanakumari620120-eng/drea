@@ -37,7 +37,9 @@ def generate_concept_and_metadata():
     try:
         print("🔹 Generating metadata with Gemini...")
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Change to this older model
+model = genai.GenerativeModel('gemini-pro')
+
 
         categories = ["Animal", "Human", "Boy", "Girl", "Sport", "Space", "Nature", "Motivation", "Quotes"]
         category = random.choice(categories)
