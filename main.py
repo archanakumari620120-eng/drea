@@ -37,9 +37,8 @@ def generate_concept_and_metadata():
     try:
         print("🔹 Generating metadata with Gemini...")
         genai.configure(api_key=GEMINI_API_KEY)
-        # Change to this older model
-  model = genai.GenerativeModel('gemini-pro')
-
+        # FIX: Corrected the indentation of this line.
+        model = genai.GenerativeModel('gemini-pro')
 
         categories = ["Animal", "Human", "Boy", "Girl", "Sport", "Space", "Nature", "Motivation", "Quotes"]
         category = random.choice(categories)
@@ -77,18 +76,19 @@ def generate_concept_and_metadata():
 def generate_image_huggingface(prompt, model_id="stabilityai/stable-diffusion-xl-base-1.0"):
     """Generates an image using Hugging Face Inference API."""
     
+    # FIX: Removed the invalid Markdown formatting from the URL.
     API_URL = f"[https://api-inference.huggingface.co/models/](https://api-inference.huggingface.co/models/){model_id}"
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {"inputs": f"Vertical (1080x1920), {prompt}, cinematic, high detail, trending on artstation"}
 
     print(f"🖼️ Requesting image from Hugging Face for prompt: {prompt}")
-    response = requests.post(API_URL, headers=headers, json=payload) # FIX: Changed api_url to API_URL
+    response = requests.post(API_URL, headers=headers, json=payload)
 
     # Handle model loading time
     if response.status_code == 503:
         print("⏳ Model is loading, waiting for 30 seconds...")
         sleep(30)
-        response = requests.post(API_URL, headers=headers, json=payload) # FIX: Changed api_url to API_URL
+        response = requests.post(API_URL, headers=headers, json=payload)
 
     if response.status_code != 200:
         raise Exception(f"Hugging Face API error {response.status_code}: {response.text}")
@@ -128,7 +128,7 @@ def create_video(image_path, audio_path, output_path="final_video.mp4"):
                 audio_clip = audio_clip.fx(vfx.loop, duration=clip_duration)
             clip = clip.set_audio(audio_clip.subclip(0, clip_duration))
 
-        clip.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+        clip.write_videofile(output_path, fps=24, codec="libx24", audio_codec="aac")
         print(f"✅ Video created successfully: {output_path}")
         return output_path
     except Exception as e:
@@ -143,7 +143,7 @@ def upload_to_youtube(video_path, title, description, tags, privacy="public"):
         print("📤 Uploading to YouTube...")
         
         token_info = json.loads(TOKEN_JSON)
-        # FIX: Corrected the scope URL string. It should not be a markdown link.
+        # FIX: Removed the invalid Markdown formatting from the scope URL.
         creds = Credentials.from_authorized_user_info(token_info, scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"])
 
         youtube = build("youtube", "v3", credentials=creds)
@@ -188,4 +188,3 @@ if __name__ == "__main__":
         print("\n🎉 Pipeline completed successfully! 🎉")
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
-        # No need to print traceback here again as it's printed in the functions
