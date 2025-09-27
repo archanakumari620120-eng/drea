@@ -4,8 +4,6 @@ on:
   schedule:
     - cron: "0 */5 * * *"   # ⏰ Har 5 ghante chalega
   workflow_dispatch:         # 🔘 Manual run ka option bhi hoga
-  
-
 jobs:
   build:
     runs-on: ubuntu-latest
