@@ -67,7 +67,7 @@ def generate_concept_and_metadata():
         model_name = choose_valid_model(preferred)
 
         # Prepare prompt
-        categories = ["Animal", "Human", "Boy", "Girl", "Sport", "Space", "Nature", "Motivation", "Quotes"]
+        categories = ["Animal", "Hanuman", "handsome Boy", "hindu Gods", "Sport", "Space", "Nature", "Motivation", "Quotes"]
         category = random.choice(categories)
         user_prompt = f"""
 You are a YouTube Shorts content expert. Generate viral content ideas.
